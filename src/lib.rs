@@ -527,3 +527,5 @@ impl DistributionContract {
 // Deduct withdrawn shares from global total shares to adjust pool size
 
 // Distribute function allows admin or users to deposit USDC rent to stakers
+
+// Enforce authorization requirement on sender for rent distribution
