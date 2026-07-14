@@ -732,3 +732,34 @@ fn test_lockup_allows_withdraw_after_expiry() {
     assert_eq!(h.client().get_shares(&user), 0);
     assert_eq!(h.share_token().balance(&user), 1000);
 }
+
+/// Issue #32 (section C): a top-up deposit restarts the lock window from the
+/// time of the new deposit, so it can't be used to escape the lockup on an
+/// already-staked position.
+#[test]
+fn test_lockup_refreshes_on_new_deposit() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    h.share_admin().mint(&user, &2000);
+
+    let lockup: u64 = 1000;
+    h.client().set_lockup_duration(&lockup);
+
+    // First deposit at t = 100 -> unlocks at 1100.
+    h.env.ledger().set_timestamp(100);
+    h.client().deposit(&user, &1000);
+    assert_eq!(h.client().get_unlock_time(&user), 1100);
+
+    // Second deposit at t = 900 -> unlock pushed out to 1900.
+    h.env.ledger().set_timestamp(900);
+    h.client().deposit(&user, &1000);
+    assert_eq!(h.client().get_unlock_time(&user), 1900);
+
+    // At t = 1100 the original window would have passed, but the refresh keeps
+    // the whole position locked.
+    h.env.ledger().set_timestamp(1100);
+    assert!(
+        h.client().try_withdraw(&user, &500).is_err(),
+        "top-up must extend the lock over the entire position"
+    );
+}
