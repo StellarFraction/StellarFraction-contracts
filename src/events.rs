@@ -44,3 +44,8 @@ pub fn global_pause_changed(env: &Env, paused: bool) {
 pub fn deposited(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
     emit(env, DEPOSIT, [pool_id, user.clone()], amount);
 }
+
+
+pub fn distributed(env: &Env, pool_id: PoolId, sender: &Address, amount: i128) {
+    emit(env, DISTRIBUTE, [pool_id, sender.clone()], amount);
+}
