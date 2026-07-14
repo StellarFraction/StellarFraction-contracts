@@ -89,6 +89,49 @@ impl DistributionContract {
         Ok(storage::get_position(&env, pool_id, &user))
     }
 
+    /// Deposits share tokens into a selected property pool.
+    pub fn deposit_into(
+        env: Env,
+        pool_id: PoolId,
+        user: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        user.require_auth();
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let mut pool = Self::load_pool(&env, pool_id)?;
+        let mut position = storage::get_position(&env, pool_id, &user);
+        let pending = Self::calculate_pool_pending(&pool, &position)?;
+        if pending > 0 {
+            token::Client::new(&env, &pool.reward_token).transfer(
+                &env.current_contract_address(),
+                &user,
+                &pending,
+            );
+        }
+
+        token::Client::new(&env, &pool.share_token).transfer(
+            &user,
+            &env.current_contract_address(),
+            &amount,
+        );
+        position.shares = position
+            .shares
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+        pool.total_shares = pool
+            .total_shares
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+        position.reward_debt = math::accumulated(position.shares, pool.acc_reward_per_share)?;
+
+        storage::set_position(&env, pool_id, &user, &position);
+        storage::set_pool(&env, pool_id, &pool);
+        Ok(())
+    }
+
     /// Deposits real estate share tokens to stake them and earn dividends.
     pub fn deposit(env: Env, user: Address, amount: i128) -> Result<(), Error> {
         user.require_auth();
@@ -277,6 +320,17 @@ impl DistributionContract {
     fn load_pool(env: &Env, pool_id: PoolId) -> Result<Pool, Error> {
         Self::check_initialized(env)?;
         storage::get_pool(env, pool_id).ok_or(Error::PoolNotFound)
+    }
+
+    fn calculate_pool_pending(pool: &Pool, position: &Position) -> Result<i128, Error> {
+        if position.shares == 0 {
+            return Ok(0);
+        }
+        math::pending(
+            position.shares,
+            pool.acc_reward_per_share,
+            position.reward_debt,
+        )
     }
 
     fn calculate_pending(env: &Env, user: &Address) -> Result<i128, Error> {
