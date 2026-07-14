@@ -169,3 +169,45 @@ fn test_deposit_after_distribution_does_not_receive_historical_rewards() {
     assert_eq!(client.get_pending(&early_user), 150);
     assert_eq!(client.get_pending(&late_user), 50);
 }
+
+#[test]
+fn test_multi_property_pool_flow() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let manager = Address::generate(&env);
+    let user_a = Address::generate(&env);
+    let user_b = Address::generate(&env);
+    let (legacy_share, _) = register_token(&env, &admin);
+    let (legacy_reward, _) = register_token(&env, &admin);
+    let (share_token, share_admin) = register_token(&env, &admin);
+    let (reward_token, reward_admin) = register_token(&env, &admin);
+    let share_client = token::Client::new(&env, &share_token);
+    let reward_client = token::Client::new(&env, &reward_token);
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &legacy_share, &legacy_reward);
+    let pool_id = client.create_pool(&manager, &share_token, &reward_token);
+    assert_eq!(pool_id, 1);
+    assert_eq!(client.get_pool_count(), 2);
+
+    share_admin.mint(&user_a, &100);
+    share_admin.mint(&user_b, &300);
+    reward_admin.mint(&admin, &400);
+    client.deposit_into(&pool_id, &user_a, &100);
+    client.deposit_into(&pool_id, &user_b, &300);
+    client.distribute_to(&pool_id, &admin, &400);
+
+    assert_eq!(client.get_pool_pending(&pool_id, &user_a), 100);
+    assert_eq!(client.get_pool_pending(&pool_id, &user_b), 300);
+    assert_eq!(client.claim_from(&pool_id, &user_a), 100);
+    assert_eq!(reward_client.balance(&user_a), 100);
+
+    client.withdraw_from(&pool_id, &user_b, &100);
+    assert_eq!(reward_client.balance(&user_b), 300);
+    assert_eq!(share_client.balance(&user_b), 100);
+    assert_eq!(client.get_position(&pool_id, &user_b).shares, 200);
+    assert_eq!(client.get_pool(&pool_id).total_shares, 300);
+}
