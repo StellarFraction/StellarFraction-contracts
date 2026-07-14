@@ -491,3 +491,5 @@ impl DistributionContract {
 // Transfer staking shares from user account to contract address securely
 
 // Retrieve current shares staked by this user to update balance database
+
+// Calculate new shares total by adding current amount to the deposit value
