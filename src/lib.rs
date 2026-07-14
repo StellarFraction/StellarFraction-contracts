@@ -1,8 +1,8 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
-pub mod types;
 pub mod storage;
+pub mod types;
 
 #[cfg(test)]
 mod test;
@@ -220,7 +220,7 @@ impl DistributionContract {
         }
         let acc_reward_per_share = storage::get_acc_reward_per_share(env);
         let debt = storage::get_user_debt(env, user);
-        
+
         let accumulated = (shares * acc_reward_per_share) / SCALE_FACTOR;
         accumulated - debt
     }
