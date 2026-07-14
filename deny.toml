@@ -34,3 +34,10 @@ multiple-versions = "warn"
 wildcards = "deny"
 # Crates explicitly disallowed, with a reason.
 deny = []
+
+[sources]
+# Dependencies must come from known registries/sources only, to prevent a
+# supply-chain swap to an unexpected origin.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
