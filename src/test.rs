@@ -211,3 +211,38 @@ fn test_multi_property_pool_flow() {
     assert_eq!(client.get_position(&pool_id, &user_b).shares, 200);
     assert_eq!(client.get_pool(&pool_id).total_shares, 300);
 }
+
+#[test]
+fn test_property_pool_accounting_is_isolated() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let (share_a, share_a_admin) = register_token(&env, &admin);
+    let (reward_a, reward_a_admin) = register_token(&env, &admin);
+    let (share_b, share_b_admin) = register_token(&env, &admin);
+    let (reward_b, reward_b_admin) = register_token(&env, &admin);
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &share_a, &reward_a);
+    let pool_a = 0;
+    let pool_b = client.create_pool(&admin, &share_b, &reward_b);
+    share_a_admin.mint(&user, &100);
+    share_b_admin.mint(&user, &400);
+    reward_a_admin.mint(&admin, &50);
+    reward_b_admin.mint(&admin, &800);
+
+    client.deposit_into(&pool_a, &user, &100);
+    client.deposit_into(&pool_b, &user, &400);
+    client.distribute_to(&pool_a, &admin, &50);
+    assert_eq!(client.get_pool_pending(&pool_a, &user), 50);
+    assert_eq!(client.get_pool_pending(&pool_b, &user), 0);
+
+    client.distribute_to(&pool_b, &admin, &800);
+    assert_eq!(client.get_pool_pending(&pool_a, &user), 50);
+    assert_eq!(client.get_pool_pending(&pool_b, &user), 800);
+    assert_eq!(client.get_pool(&pool_a).total_shares, 100);
+    assert_eq!(client.get_pool(&pool_b).total_shares, 400);
+}
