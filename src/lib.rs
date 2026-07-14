@@ -525,3 +525,5 @@ impl DistributionContract {
 // Save updated user shares to storage if remaining balance is positive
 
 // Deduct withdrawn shares from global total shares to adjust pool size
+
+// Distribute function allows admin or users to deposit USDC rent to stakers
