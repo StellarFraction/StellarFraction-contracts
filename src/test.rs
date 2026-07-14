@@ -923,3 +923,26 @@ fn test_fee_distribution_conserves_tokens() {
     // Fee is exactly 2.5% of 10_000.
     assert_eq!(collector_bal, 250);
 }
+
+/// Issue #34 (section E): the fee uses integer basis-point math and must round
+/// *down*, so the collector never receives more than its exact share and the
+/// stakers keep the rounding dust. 1 bps of 15_000 = 1.5 -> truncates to 1.
+#[test]
+fn test_fee_rounds_down() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    let collector = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+    h.reward_admin().mint(&h.admin, &15_000);
+    h.client().deposit(&user, &1000);
+
+    h.client().set_management_fee(&1); // 0.01%
+    h.client().set_fee_collector(&collector);
+
+    // 1 bps of 15_000 = 1.5, truncated to 1.
+    h.client().distribute(&h.admin, &15_000);
+    assert_eq!(h.reward_token().balance(&collector), 1);
+
+    // Staker gets the remainder (15_000 - 1), dust included.
+    assert_eq!(h.client().get_pending(&user), 14_999);
+}
