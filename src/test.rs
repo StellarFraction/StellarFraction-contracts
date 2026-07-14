@@ -297,3 +297,33 @@ fn test_precision_rounding_micro_investments() {
     assert_eq!(h.client().get_pending(&b), 1);
     assert_eq!(h.client().get_pending(&c), 1);
 }
+
+/// Issue #24: unit-test the single-staker deposit path in isolation, asserting
+/// every piece of state moves consistently - user share ledger, global total,
+/// token custody transfer, and the reward-debt baseline. Also covers a second
+/// top-up deposit accumulating onto the existing position.
+#[test]
+fn test_single_staker_deposit() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+
+    // First deposit.
+    h.client().deposit(&user, &400);
+    assert_eq!(h.client().get_shares(&user), 400);
+    assert_eq!(h.share_token().balance(&user), 600);
+    assert_eq!(h.share_token().balance(&h.contract_id), 400);
+    // No rewards yet, so debt baseline is zero.
+    assert_eq!(h.client().get_debt(&user), 0);
+    assert_eq!(h.client().get_pending(&user), 0);
+
+    // Top-up deposit accumulates onto the same position.
+    h.client().deposit(&user, &600);
+    assert_eq!(h.client().get_shares(&user), 1000);
+    assert_eq!(h.share_token().balance(&user), 0);
+    assert_eq!(h.share_token().balance(&h.contract_id), 1000);
+
+    // Global total mirrors the single staker's holdings.
+    let (_, _, _, total_shares, _) = h.client().get_contract_info();
+    assert_eq!(total_shares, 1000);
+}
