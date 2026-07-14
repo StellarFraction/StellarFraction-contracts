@@ -359,6 +359,19 @@ impl DistributionContract {
         soroban_sdk::String::from_str(&env, CONTRACT_VERSION)
     }
 
+    /// Read-only: Structured contract identity (name, version, description) in a
+    /// single call, mirroring the embedded wasm metadata.
+    pub fn metadata(env: Env) -> crate::types::ContractMetadata {
+        crate::types::ContractMetadata {
+            name: soroban_sdk::String::from_str(&env, "StellarFraction Distribution"),
+            version: soroban_sdk::String::from_str(&env, CONTRACT_VERSION),
+            description: soroban_sdk::String::from_str(
+                &env,
+                "O(1) proportional rental-yield distribution for fractional real estate stakers",
+            ),
+        }
+    }
+
     /// Admin-only: Set the staking lockup duration (in seconds). New deposits
     /// lock the depositor's stake for this long before it can be withdrawn.
     /// A duration of 0 disables lockups entirely.
