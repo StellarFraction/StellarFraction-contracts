@@ -493,3 +493,5 @@ impl DistributionContract {
 // Retrieve current shares staked by this user to update balance database
 
 // Calculate new shares total by adding current amount to the deposit value
+
+// Save updated user shares count to persistent contract storage index
