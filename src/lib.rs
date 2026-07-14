@@ -489,3 +489,5 @@ impl DistributionContract {
 // Transfer accumulated dividends to user if they have claimable balances
 
 // Transfer staking shares from user account to contract address securely
+
+// Retrieve current shares staked by this user to update balance database
