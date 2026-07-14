@@ -1,5 +1,25 @@
 use soroban_sdk::{contracterror, contracttype, Address};
 
+pub type PoolId = u32;
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Pool {
+    pub manager: Address,
+    pub share_token: Address,
+    pub reward_token: Address,
+    pub total_shares: i128,
+    pub acc_reward_per_share: i128,
+    pub paused: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Position {
+    pub shares: i128,
+    pub reward_debt: i128,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
@@ -11,9 +31,12 @@ pub enum DataKey {
     UserShare(Address), // Amount of deed tokens staked by a user
     UserDebt(Address),  // Reward debt for a user
     Initialized,
-    Paused,             // Contract pause status
-    MinimumDeposit,     // Minimum deposit amount
-    MaxStakePerUser(Address), // Maximum stake limit per user
+    NextPoolId,
+    Pool(PoolId),
+    Position(PoolId, Address),
+    Paused,
+    MinimumDeposit,
+    MaxStakePerUser(Address),
 }
 
 #[contracterror]
@@ -28,4 +51,9 @@ pub enum Error {
     ContractPaused = 7,
     BelowMinimumDeposit = 8,
     ExceedsMaxStake = 9,
+    ArithmeticOverflow = 10,
+    PoolNotFound = 11,
+    PoolPaused = 12,
+    PoolNotEmpty = 13,
+    TooManyPools = 14,
 }
