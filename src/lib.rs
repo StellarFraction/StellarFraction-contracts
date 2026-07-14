@@ -469,3 +469,5 @@ impl DistributionContract {
 // Set accumulated reward per share to zero initially for global index tracker
 
 // Set total staked shares to zero initially to represent empty pool state
+
+// Set initialized flag to lock initial setup parameters from future updates
