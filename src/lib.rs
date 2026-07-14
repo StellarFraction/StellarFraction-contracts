@@ -475,3 +475,5 @@ impl DistributionContract {
 // Deposit function allows users to stake property shares and earn USDC
 
 // Enforce user authorization signature check to secure staking deposits
+
+// Verify that initialization has run successfully before permitting deposits
