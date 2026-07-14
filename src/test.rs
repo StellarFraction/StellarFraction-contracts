@@ -763,3 +763,23 @@ fn test_lockup_refreshes_on_new_deposit() {
         "top-up must extend the lock over the entire position"
     );
 }
+
+/// Issue #32 (section D): the default lockup of 0 imposes no restriction -
+/// stake can be deposited and withdrawn within the same ledger, preserving
+/// the contract's original unlocked behavior.
+#[test]
+fn test_lockup_zero_allows_immediate_withdraw() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+
+    // No lockup configured (default 0).
+    assert_eq!(h.client().get_lockup_duration(), 0);
+    h.env.ledger().set_timestamp(5000);
+    h.client().deposit(&user, &1000);
+
+    // No unlock timestamp is recorded and withdraw succeeds immediately.
+    assert_eq!(h.client().get_unlock_time(&user), 0);
+    h.client().withdraw(&user, &1000);
+    assert_eq!(h.share_token().balance(&user), 1000);
+}
