@@ -463,3 +463,5 @@ impl DistributionContract {
 // Check if contract has already been initialized to prevent re-initialization
 
 // Store property share token address in persistent storage for stakers check
+
+// Store reward token address in persistent storage for dividend distributions
