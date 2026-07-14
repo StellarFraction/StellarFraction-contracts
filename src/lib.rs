@@ -1,6 +1,7 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
 
+pub mod events;
 pub mod math;
 pub mod storage;
 pub mod types;
@@ -71,6 +72,7 @@ impl DistributionContract {
         };
         storage::set_pool(&env, pool_id, &pool);
         storage::set_next_pool_id(&env, next_pool_id);
+        events::pool_created(&env, pool_id, &pool.manager);
 
         Ok(pool_id)
     }
@@ -91,6 +93,7 @@ impl DistributionContract {
         pool.manager.require_auth();
         pool.manager = new_manager;
         storage::set_pool(&env, pool_id, &pool);
+        events::manager_changed(&env, pool_id, &pool.manager);
         Ok(())
     }
 
@@ -100,6 +103,7 @@ impl DistributionContract {
         pool.manager.require_auth();
         pool.paused = paused;
         storage::set_pool(&env, pool_id, &pool);
+        events::pause_changed(&env, pool_id, paused);
         Ok(())
     }
 
@@ -150,6 +154,7 @@ impl DistributionContract {
 
         storage::set_position(&env, pool_id, &user, &position);
         storage::set_pool(&env, pool_id, &pool);
+        events::deposited(&env, pool_id, &user, amount);
         Ok(())
     }
 
@@ -188,6 +193,7 @@ impl DistributionContract {
             .checked_add(increase)
             .ok_or(Error::ArithmeticOverflow)?;
         storage::set_pool(&env, pool_id, &pool);
+        events::distributed(&env, pool_id, &sender, amount);
         Ok(())
     }
 
@@ -208,6 +214,7 @@ impl DistributionContract {
             &user,
             &pending,
         );
+        events::claimed(&env, pool_id, &user, pending);
         Ok(pending)
     }
 
@@ -232,6 +239,7 @@ impl DistributionContract {
                     &user,
                     &pending,
                 );
+                events::claimed(&env, pool_id, &user, pending);
                 total_claimed = total_claimed
                     .checked_add(pending)
                     .ok_or(Error::ArithmeticOverflow)?;
@@ -286,6 +294,7 @@ impl DistributionContract {
             storage::set_position(&env, pool_id, &user, &position);
         }
         storage::set_pool(&env, pool_id, &pool);
+        events::withdrawn(&env, pool_id, &user, amount);
         Ok(())
     }
 
