@@ -836,3 +836,25 @@ fn test_fee_extraction_proportional() {
     assert_eq!(h.client().get_pending(&a), 2250);
     assert_eq!(h.client().get_pending(&b), 6750);
 }
+
+/// Issue #34 (section B): with the fee at 0 (default), nothing is skimmed even
+/// when a collector is configured - the entire distribution reaches stakers.
+#[test]
+fn test_fee_zero_skims_nothing() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    let collector = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+    h.reward_admin().mint(&h.admin, &10_000);
+    h.client().deposit(&user, &1000);
+
+    // Collector set, but fee stays at the default 0.
+    h.client().set_fee_collector(&collector);
+    assert_eq!(h.client().get_management_fee(), 0);
+
+    h.client().distribute(&h.admin, &4000);
+
+    // No skim: collector untouched, staker owed the whole amount.
+    assert_eq!(h.reward_token().balance(&collector), 0);
+    assert_eq!(h.client().get_pending(&user), 4000);
+}
