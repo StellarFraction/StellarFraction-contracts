@@ -481,3 +481,5 @@ impl DistributionContract {
 // Enforce minimum threshold that deposited share amount must be positive
 
 // Fetch share token address from contract storage to identify target SAC client
+
+// Fetch reward token address from contract storage to handle pending claims
