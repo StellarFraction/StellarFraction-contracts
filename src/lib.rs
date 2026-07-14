@@ -299,6 +299,37 @@ impl DistributionContract {
         storage::is_paused(&env)
     }
 
+    /// Admin-only: Rescue tokens accidentally sent to the contract.
+    ///
+    /// Hard-guarded so it can NEVER move the staked share token or the reward
+    /// token - those balances belong to stakers (share custody and owed
+    /// dividends respectively). Only unrelated ("foreign") tokens that were
+    /// mistakenly transferred in can be swept out, protecting user funds.
+    pub fn recover_token(
+        env: Env,
+        token: Address,
+        to: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        // Refuse to touch either protocol token; those are staker funds.
+        if token == storage::get_share_token(&env) || token == storage::get_reward_token(&env) {
+            return Err(Error::CannotRecoverProtocolToken);
+        }
+
+        let client = token::Client::new(&env, &token);
+        client.transfer(&env.current_contract_address(), &to, &amount);
+
+        Ok(())
+    }
+
     // Helper functions
 
     fn check_initialized(env: &Env) -> Result<(), Error> {

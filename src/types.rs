@@ -28,4 +28,5 @@ pub enum Error {
     ContractPaused = 7,
     BelowMinimumDeposit = 8,
     ExceedsMaxStake = 9,
+    CannotRecoverProtocolToken = 10,
 }
