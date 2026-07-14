@@ -453,3 +453,5 @@ impl DistributionContract {
         Ok(())
     }
 }
+
+// StellarFraction distribution contract - handles real estate dividend payouts
