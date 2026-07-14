@@ -499,3 +499,5 @@ impl DistributionContract {
 // Fetch global total shares to add newly deposited shares to pool sum
 
 // Save updated global total shares value to track distribution ratio
+
+// Fetch global reward accumulator index to compute new user reward debt
