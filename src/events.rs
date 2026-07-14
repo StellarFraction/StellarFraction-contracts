@@ -31,11 +31,13 @@ pub fn contract_paused(env: &Env, paused: bool) {
 
 // ── User actions ──────────────────────────────────────────────────
 pub fn deposited(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
-    env.events().publish((DEPOSIT, pool_id, user.clone()), amount);
+    env.events()
+        .publish((DEPOSIT, pool_id, user.clone()), amount);
 }
 
 pub fn distributed(env: &Env, pool_id: PoolId, sender: &Address, amount: i128) {
-    env.events().publish((DISTRIBUTE, pool_id, sender.clone()), amount);
+    env.events()
+        .publish((DISTRIBUTE, pool_id, sender.clone()), amount);
 }
 
 pub fn claimed(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
@@ -43,5 +45,6 @@ pub fn claimed(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
 }
 
 pub fn withdrawn(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
-    env.events().publish((WITHDRAW, pool_id, user.clone()), amount);
+    env.events()
+        .publish((WITHDRAW, pool_id, user.clone()), amount);
 }
