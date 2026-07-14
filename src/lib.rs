@@ -477,3 +477,5 @@ impl DistributionContract {
 // Enforce user authorization signature check to secure staking deposits
 
 // Verify that initialization has run successfully before permitting deposits
+
+// Enforce minimum threshold that deposited share amount must be positive
