@@ -161,3 +161,26 @@ pub fn set_unlock_at(env: &Env, user: &Address, ts: u64) {
         .persistent()
         .set(&DataKey::UnlockAt(user.clone()), &ts);
 }
+
+pub fn get_management_fee_bps(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::ManagementFeeBps)
+        .unwrap_or(0)
+}
+
+pub fn set_management_fee_bps(env: &Env, bps: u32) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ManagementFeeBps, &bps);
+}
+
+pub fn get_fee_collector(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::FeeCollector)
+}
+
+pub fn set_fee_collector(env: &Env, collector: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::FeeCollector, collector);
+}

@@ -16,6 +16,8 @@ pub enum DataKey {
     MaxStakePerUser(Address), // Maximum stake limit per user
     LockupDuration,     // Seconds a deposit is locked before it can be withdrawn
     UnlockAt(Address),  // Ledger timestamp at which a user's stake unlocks
+    ManagementFeeBps,   // Landlord management fee in basis points (1 bps = 0.01%)
+    FeeCollector,       // Address that receives skimmed management fees
 }
 
 #[contracterror]
@@ -32,4 +34,6 @@ pub enum Error {
     ExceedsMaxStake = 9,
     CannotRecoverProtocolToken = 10,
     StillLocked = 11,
+    InvalidFeeBps = 12,
+    FeeCollectorNotSet = 13,
 }
