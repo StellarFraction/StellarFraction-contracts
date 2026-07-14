@@ -3,3 +3,12 @@ use crate::types::Error;
 /// Fixed-point scaling factor: 1e12 for 12 decimal precision.
 pub const SCALE: i128 = 1_000_000_000_000;
 
+// ── Core arithmetic helpers ─────────────────────────────────────
+
+/// Multiplies `a * b` then divides by SCALE, checking overflow at each step.
+fn scale_mul_div(a: i128, b: i128) -> Result<i128, Error> {
+    a.checked_mul(b)
+        .and_then(|p| p.checked_div(SCALE))
+        .ok_or(Error::ArithmeticOverflow)
+}
+
