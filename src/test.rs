@@ -164,3 +164,74 @@ fn test_errors_and_boundaries() {
     let err_withdraw_insufficient = client.try_withdraw(&user, &100);
     assert!(err_withdraw_insufficient.is_err());
 }
+
+/// Shared harness: owns the env and token/contract addresses. Clients are
+/// built on demand so the struct itself doesn't self-reference the env.
+struct Harness {
+    env: Env,
+    admin: Address,
+    contract_id: Address,
+    share_id: Address,
+    reward_id: Address,
+}
+
+impl Harness {
+    fn client(&self) -> DistributionContractClient<'_> {
+        DistributionContractClient::new(&self.env, &self.contract_id)
+    }
+    fn share_token(&self) -> TokenClient<'_> {
+        TokenClient::new(&self.env, &self.share_id)
+    }
+    fn reward_token(&self) -> TokenClient<'_> {
+        TokenClient::new(&self.env, &self.reward_id)
+    }
+    fn share_admin(&self) -> StellarAssetClient<'_> {
+        StellarAssetClient::new(&self.env, &self.share_id)
+    }
+    fn reward_admin(&self) -> StellarAssetClient<'_> {
+        StellarAssetClient::new(&self.env, &self.reward_id)
+    }
+}
+
+fn setup() -> Harness {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let (share_id, _, _) = create_token(&env, &admin);
+    let (reward_id, _, _) = create_token(&env, &admin);
+
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+    client.initialize(&admin, &share_id, &reward_id);
+
+    Harness {
+        env,
+        admin,
+        contract_id,
+        share_id,
+        reward_id,
+    }
+}
+
+/// Issue #21: distribute must reject when there are no shares staked,
+/// guarding the `amount * SCALE / total_shares` division against a zero
+/// denominator — both before anyone stakes and after everyone withdraws.
+#[test]
+fn test_distribute_division_by_zero_safeguard() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+    h.reward_admin().mint(&h.admin, &10_000);
+
+    // No stakers yet -> distribute must error, never divide by zero.
+    assert!(h.client().try_distribute(&h.admin, &1000).is_err());
+
+    // Stake, then fully withdraw so total_shares returns to zero.
+    h.client().deposit(&user, &1000);
+    assert!(h.client().try_distribute(&h.admin, &1000).is_ok());
+    h.client().withdraw(&user, &1000);
+
+    // Denominator is zero again -> must still be safely rejected.
+    assert!(h.client().try_distribute(&h.admin, &1000).is_err());
+}
