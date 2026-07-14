@@ -175,19 +175,45 @@ impl DistributionContract {
         }
 
         let reward_token_addr = storage::get_reward_token(&env);
-
-        // 1. Transfer reward tokens to contract
         let reward_client = token::Client::new(&env, &reward_token_addr);
+
+        // 1. Pull the full amount from the sender into the contract.
         reward_client.transfer(&sender, &env.current_contract_address(), &amount);
 
-        // 2. Accumulate the reward per share
+        // 2. Skim the landlord management fee (if configured) off the top and
+        //    forward it to the collector. Only the remainder is shared out to
+        //    stakers. The fee is applied solely when a non-zero rate AND a
+        //    collector are both set.
+        let fee_bps = storage::get_management_fee_bps(&env);
+        let mut fee_amount: i128 = 0;
+        if fee_bps > 0 {
+            match storage::get_fee_collector(&env) {
+                Some(collector) => {
+                    fee_amount = (amount * fee_bps as i128) / 10_000;
+                    if fee_amount > 0 {
+                        reward_client.transfer(
+                            &env.current_contract_address(),
+                            &collector,
+                            &fee_amount,
+                        );
+                    }
+                }
+                None => return Err(Error::FeeCollectorNotSet),
+            }
+        }
+        let distributable = amount - fee_amount;
+
+        // 3. Accumulate the reward per share over the post-fee remainder.
         let acc_reward_per_share = storage::get_acc_reward_per_share(&env);
-        let reward_increase = (amount * SCALE_FACTOR) / total_shares;
+        let reward_increase = (distributable * SCALE_FACTOR) / total_shares;
         let new_acc_reward_per_share = acc_reward_per_share + reward_increase;
         storage::set_acc_reward_per_share(&env, new_acc_reward_per_share);
 
-        // 3. Emit distribution event
-        env.events().publish(("distribute",), (amount, total_shares, new_acc_reward_per_share));
+        // 4. Emit distribution event (reports the net distributed amount).
+        env.events().publish(
+            ("distribute",),
+            (distributable, fee_amount, total_shares, new_acc_reward_per_share),
+        );
 
         Ok(())
     }
