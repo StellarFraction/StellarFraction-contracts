@@ -511,3 +511,5 @@ impl DistributionContract {
 // Enforce user auth check to prevent unauthorized withdrawals from account
 
 // Validate that the withdraw amount is greater than zero before processing
+
+// Verify user has sufficient shares to fulfill the withdrawal request
