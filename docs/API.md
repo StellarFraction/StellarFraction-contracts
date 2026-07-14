@@ -35,3 +35,31 @@ Sets the admin and the two token addresses, and zeroes the accumulators.
 ```rust
 client.initialize(&admin, &share_token_id, &reward_token_id);
 ```
+
+---
+
+## Staking
+
+### `deposit(user, amount) -> Result<(), Error>`
+
+Stakes `amount` share tokens, transferring them into the contract's custody.
+
+- Requires `user.require_auth()`.
+- Rejected when the contract is **paused** (`ContractPaused`).
+- Enforces `MinimumDeposit` (`BelowMinimumDeposit`) and the per-user stake cap
+  (`ExceedsMaxStake`).
+- **Auto-claims** any pending rewards first, so an existing position is never
+  silently overwritten.
+- If a lockup is configured, each deposit **refreshes** the position's unlock
+  timestamp to `now + lockup_duration`.
+
+### `withdraw(user, amount) -> Result<(), Error>`
+
+Unstakes `amount` share tokens back to the user.
+
+- Requires `user.require_auth()`.
+- Fails with `InsufficientShares` if `amount` exceeds the staked balance.
+- Fails with `StillLocked` while the position's lockup window has not elapsed.
+- **Auto-claims** pending rewards as part of the withdrawal.
+- A full withdrawal clears the position's share and debt storage entries.
+
