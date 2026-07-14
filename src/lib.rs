@@ -90,7 +90,15 @@ impl DistributionContract {
         let new_debt = (new_shares * acc_reward_per_share) / SCALE_FACTOR;
         storage::set_user_debt(&env, &user, new_debt);
 
-        // 5. Emit deposit event
+        // 5. Refresh the lockup: each deposit restarts the lock window so a
+        // fresh top-up can't be used to sidestep the configured lockup.
+        let lockup = storage::get_lockup_duration(&env);
+        if lockup > 0 {
+            let unlock_at = env.ledger().timestamp() + lockup;
+            storage::set_unlock_at(&env, &user, unlock_at);
+        }
+
+        // 6. Emit deposit event
         env.events().publish(("deposit", user.clone()), (amount, new_shares));
 
         Ok(())
