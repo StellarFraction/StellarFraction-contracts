@@ -235,3 +235,33 @@ fn test_distribute_division_by_zero_safeguard() {
     // Denominator is zero again -> must still be safely rejected.
     assert!(h.client().try_distribute(&h.admin, &1000).is_err());
 }
+
+/// Issue #22: reward math must stay correct at institutional scale without
+/// overflowing i128. Uses a billion tokens at 7-decimal precision (1e16) and
+/// a matching distribution, exercising the `amount * SCALE_FACTOR` (1e28) and
+/// `shares * acc_reward_per_share` intermediates while staying within i128's
+/// ~1.7e38 ceiling. cargo test runs with overflow-checks on, so any overflow
+/// would panic rather than silently wrap.
+#[test]
+fn test_reward_math_no_overflow_at_scale() {
+    let h = setup();
+    let whale = Address::generate(&h.env);
+
+    // 1 billion deed tokens at 7 decimals.
+    let big_stake: i128 = 1_000_000_000 * 10_000_000; // 1e16
+    h.share_admin().mint(&whale, &big_stake);
+    h.reward_admin().mint(&h.admin, &big_stake);
+
+    h.client().deposit(&whale, &big_stake);
+
+    // Distribute a large lump sum; internally computes big_stake * 1e12 (~1e28).
+    h.client().distribute(&h.admin, &big_stake);
+
+    // Sole staker is owed the entire distribution, exactly, with no overflow.
+    assert_eq!(h.client().get_pending(&whale), big_stake);
+
+    // A second identical distribution should double the entitlement.
+    h.reward_admin().mint(&h.admin, &big_stake);
+    h.client().distribute(&h.admin, &big_stake);
+    assert_eq!(h.client().get_pending(&whale), big_stake * 2);
+}
