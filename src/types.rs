@@ -48,4 +48,5 @@ pub enum Error {
     PoolNotFound = 8,
     PoolPaused = 9,
     PoolNotEmpty = 10,
+    TooManyPools = 11,
 }

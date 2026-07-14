@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
 
 pub mod math;
 pub mod storage;
@@ -187,6 +187,35 @@ impl DistributionContract {
             &pending,
         );
         Ok(pending)
+    }
+
+    /// Claims rewards from up to twenty property pools in one invocation.
+    pub fn claim_many(env: Env, user: Address, pool_ids: Vec<PoolId>) -> Result<i128, Error> {
+        user.require_auth();
+        if pool_ids.len() > 20 {
+            return Err(Error::TooManyPools);
+        }
+
+        let mut total_claimed = 0i128;
+        for pool_id in pool_ids.iter() {
+            let pool = Self::load_pool(&env, pool_id)?;
+            let mut position = storage::get_position(&env, pool_id, &user);
+            let pending = Self::calculate_pool_pending(&pool, &position)?;
+            if pending > 0 {
+                position.reward_debt =
+                    math::accumulated(position.shares, pool.acc_reward_per_share)?;
+                storage::set_position(&env, pool_id, &user, &position);
+                token::Client::new(&env, &pool.reward_token).transfer(
+                    &env.current_contract_address(),
+                    &user,
+                    &pending,
+                );
+                total_claimed = total_claimed
+                    .checked_add(pending)
+                    .ok_or(Error::ArithmeticOverflow)?;
+            }
+        }
+        Ok(total_claimed)
     }
 
     /// Withdraws share tokens from a selected property pool.

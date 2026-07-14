@@ -1,6 +1,6 @@
 #[cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, token, Address, Env};
+use soroban_sdk::{testutils::Address as _, token, vec, Address, Env};
 
 fn register_token<'a>(env: &'a Env, admin: &Address) -> (Address, token::StellarAssetClient<'a>) {
     let contract = env.register_stellar_asset_contract_v2(admin.clone());
@@ -245,4 +245,9 @@ fn test_property_pool_accounting_is_isolated() {
     assert_eq!(client.get_pool_pending(&pool_b, &user), 800);
     assert_eq!(client.get_pool(&pool_a).total_shares, 100);
     assert_eq!(client.get_pool(&pool_b).total_shares, 400);
+
+    let claimed = client.claim_many(&user, &vec![&env, pool_a, pool_b]);
+    assert_eq!(claimed, 850);
+    assert_eq!(token::Client::new(&env, &reward_a).balance(&user), 50);
+    assert_eq!(token::Client::new(&env, &reward_b).balance(&user), 800);
 }
