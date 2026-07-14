@@ -17,3 +17,21 @@ characteristics:
 
 The contract maps each piece of state to the tier that minimizes rent while
 preserving correctness. Details for each follow in the next sections.
+
+## Instance storage — global config
+
+These keys are **fixed in count** (they don't grow with users) and are read on
+almost every call, so they live in **instance** storage and share a single rent
+bucket:
+
+- `Admin`, `ShareToken`, `RewardToken`
+- `AccRewardPerShare`, `TotalShares`
+- `Initialized`, `Paused`
+- `MinimumDeposit`, `LockupDuration`
+- `ManagementFeeBps`, `FeeCollector`
+
+**Why it saves gas:** bundling all singletons into the instance bucket means the
+contract renews **one** rent entry instead of a dozen separate ones, and reads
+of hot config values (e.g. `TotalShares` on every `distribute`) stay cheap. The
+whole set is a handful of small scalars/addresses, so the instance footprint
+stays tiny.
