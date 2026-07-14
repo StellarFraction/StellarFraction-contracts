@@ -1,0 +1,11 @@
+# cargo-deny policy for the StellarFraction contracts.
+# Run locally with:  cargo install cargo-deny && cargo deny check
+# See https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+# RustSec advisory database used to flag vulnerable dependencies.
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Refuse to build on a yanked crate.
+yanked = "deny"
+# Advisory IDs to ignore, each with a justification. Keep empty by default.
+ignore = []
