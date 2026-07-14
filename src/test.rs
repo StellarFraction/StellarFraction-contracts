@@ -626,3 +626,24 @@ fn test_recover_foreign_token_succeeds() {
     assert_eq!(foreign_token.balance(&recipient), 5000);
     assert_eq!(foreign_token.balance(&h.contract_id), 0);
 }
+
+/// Issue #30 (section C): the staked share token is staker custody and must be
+/// un-recoverable - even by the admin - so positions can never be swept out.
+#[test]
+fn test_recover_rejects_share_token() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    let recipient = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+    h.client().deposit(&user, &1000);
+
+    // Contract now custodies 1000 share tokens; admin must not be able to take them.
+    let share_id = h.share_token().address;
+    let res = h.client().try_recover_token(&share_id, &recipient, &1000);
+    assert!(res.is_err(), "share-token recovery must be rejected");
+
+    // Custody is untouched and the staker can still withdraw in full.
+    assert_eq!(h.share_token().balance(&h.contract_id), 1000);
+    h.client().withdraw(&user, &1000);
+    assert_eq!(h.share_token().balance(&user), 1000);
+}
