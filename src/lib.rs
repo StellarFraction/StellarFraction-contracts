@@ -497,3 +497,5 @@ impl DistributionContract {
 // Save updated user shares count to persistent contract storage index
 
 // Fetch global total shares to add newly deposited shares to pool sum
+
+// Save updated global total shares value to track distribution ratio
