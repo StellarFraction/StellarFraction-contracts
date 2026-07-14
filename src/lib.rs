@@ -23,6 +23,8 @@ impl DistributionContract {
         share_token: Address,
         reward_token: Address,
     ) -> Result<(), Error> {
+        admin.require_auth();
+
         if storage::is_initialized(&env) {
             return Err(Error::AlreadyInitialized);
         }
@@ -58,6 +60,7 @@ impl DistributionContract {
         reward_token: Address,
     ) -> Result<PoolId, Error> {
         Self::check_initialized(&env)?;
+        Self::check_not_paused(&env)?;
         storage::get_admin(&env).require_auth();
 
         let pool_id = storage::get_next_pool_id(&env);
@@ -121,13 +124,26 @@ impl DistributionContract {
         amount: i128,
     ) -> Result<(), Error> {
         user.require_auth();
+        Self::check_not_paused(&env)?;
         if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+
+        let minimum_deposit = storage::get_minimum_deposit(&env);
+        if amount < minimum_deposit {
+            return Err(Error::BelowMinimumDeposit);
         }
 
         let mut pool = Self::load_pool(&env, pool_id)?;
         Self::ensure_pool_active(&pool)?;
         let mut position = storage::get_position(&env, pool_id, &user);
+        let new_shares = position
+            .shares
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
+        if new_shares > storage::get_max_stake_per_user(&env, &user) {
+            return Err(Error::ExceedsMaxStake);
+        }
         let pending = Self::calculate_pool_pending(&pool, &position)?;
         if pending > 0 {
             token::Client::new(&env, &pool.reward_token).transfer(
@@ -142,10 +158,7 @@ impl DistributionContract {
             &env.current_contract_address(),
             &amount,
         );
-        position.shares = position
-            .shares
-            .checked_add(amount)
-            .ok_or(Error::ArithmeticOverflow)?;
+        position.shares = new_shares;
         pool.total_shares = pool
             .total_shares
             .checked_add(amount)
@@ -173,6 +186,7 @@ impl DistributionContract {
         amount: i128,
     ) -> Result<(), Error> {
         sender.require_auth();
+        Self::check_not_paused(&env)?;
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
@@ -347,11 +361,71 @@ impl DistributionContract {
         )
     }
 
+    /// Admin-only: Pauses pool creation, deposits, and distributions globally.
+    pub fn pause(env: Env) -> Result<(), Error> {
+        Self::check_initialized(&env)?;
+        storage::get_admin(&env).require_auth();
+        storage::set_paused(&env, true);
+        events::contract_paused(&env, true);
+        Ok(())
+    }
+
+    /// Admin-only: Resumes globally paused operations.
+    pub fn unpause(env: Env) -> Result<(), Error> {
+        Self::check_initialized(&env)?;
+        storage::get_admin(&env).require_auth();
+        storage::set_paused(&env, false);
+        events::contract_paused(&env, false);
+        Ok(())
+    }
+
+    /// Admin-only: Sets the minimum amount accepted by a deposit operation.
+    pub fn set_minimum_deposit(env: Env, amount: i128) -> Result<(), Error> {
+        Self::check_initialized(&env)?;
+        storage::get_admin(&env).require_auth();
+        if amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+        storage::set_minimum_deposit(&env, amount);
+        Ok(())
+    }
+
+    /// Admin-only: Sets the per-pool stake ceiling for an investor.
+    pub fn set_max_stake_per_user(env: Env, user: Address, limit: i128) -> Result<(), Error> {
+        Self::check_initialized(&env)?;
+        storage::get_admin(&env).require_auth();
+        if limit < 0 {
+            return Err(Error::InvalidAmount);
+        }
+        storage::set_max_stake_per_user(&env, &user, limit);
+        Ok(())
+    }
+
+    /// Admin-only: Transfers contract administration to a new address.
+    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), Error> {
+        Self::check_initialized(&env)?;
+        storage::get_admin(&env).require_auth();
+        storage::set_admin(&env, &new_admin);
+        Ok(())
+    }
+
+    /// Read-only: Returns whether global emergency pause is active.
+    pub fn is_paused(env: Env) -> bool {
+        storage::is_paused(&env)
+    }
+
     // Helper functions
 
     fn check_initialized(env: &Env) -> Result<(), Error> {
         if !storage::is_initialized(env) {
             return Err(Error::NotInitialized);
+        }
+        Ok(())
+    }
+
+    fn check_not_paused(env: &Env) -> Result<(), Error> {
+        if storage::is_paused(env) {
+            return Err(Error::ContractPaused);
         }
         Ok(())
     }

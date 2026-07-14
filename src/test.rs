@@ -107,6 +107,20 @@ fn test_full_dividend_distribution_flow() {
 }
 
 #[test]
+fn test_initialize_requires_admin_auth() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let (share_token_id, _) = register_token(&env, &admin);
+    let (reward_token_id, _) = register_token(&env, &admin);
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    assert!(client
+        .try_initialize(&admin, &share_token_id, &reward_token_id)
+        .is_err());
+}
+
+#[test]
 fn test_errors_and_boundaries() {
     let env = Env::default();
     env.mock_all_auths();
@@ -138,6 +152,38 @@ fn test_errors_and_boundaries() {
     // Try to withdraw more than staked
     let err_withdraw_insufficient = client.try_withdraw(&user, &100);
     assert!(err_withdraw_insufficient.is_err());
+}
+
+#[test]
+fn test_global_pause_and_deposit_constraints_apply_to_pools() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let (share_token_id, share_admin) = register_token(&env, &admin);
+    let (reward_token_id, reward_admin) = register_token(&env, &admin);
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &share_token_id, &reward_token_id);
+    share_admin.mint(&user, &100);
+    reward_admin.mint(&admin, &10);
+    client.set_minimum_deposit(&50);
+    assert!(client.try_deposit(&user, &49).is_err());
+
+    client.set_max_stake_per_user(&user, &60);
+    assert!(client.try_deposit(&user, &61).is_err());
+    client.deposit(&user, &60);
+
+    client.pause();
+    assert!(client.is_paused());
+    assert!(client.try_deposit(&user, &50).is_err());
+    assert!(client.try_distribute(&admin, &10).is_err());
+    client.withdraw(&user, &10);
+
+    client.unpause();
+    assert!(!client.is_paused());
 }
 
 #[test]

@@ -16,6 +16,10 @@ pub fn pause_changed(env: &Env, pool_id: PoolId, paused: bool) {
         .publish((symbol_short!("paused"), pool_id), paused);
 }
 
+pub fn contract_paused(env: &Env, paused: bool) {
+    env.events().publish((symbol_short!("pause"),), paused);
+}
+
 pub fn deposited(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
     env.events()
         .publish((symbol_short!("deposit"), pool_id, user.clone()), amount);

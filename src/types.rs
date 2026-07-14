@@ -34,6 +34,9 @@ pub enum DataKey {
     NextPoolId,
     Pool(PoolId),
     Position(PoolId, Address),
+    Paused,
+    MinimumDeposit,
+    MaxStakePerUser(Address),
 }
 
 #[contracterror]
@@ -45,9 +48,12 @@ pub enum Error {
     NoSharesStaked = 4,
     InvalidAmount = 5,
     NotAdmin = 6,
-    ArithmeticOverflow = 7,
-    PoolNotFound = 8,
-    PoolPaused = 9,
-    PoolNotEmpty = 10,
-    TooManyPools = 11,
+    ContractPaused = 7,
+    BelowMinimumDeposit = 8,
+    ExceedsMaxStake = 9,
+    ArithmeticOverflow = 10,
+    PoolNotFound = 11,
+    PoolPaused = 12,
+    PoolNotEmpty = 13,
+    TooManyPools = 14,
 }
