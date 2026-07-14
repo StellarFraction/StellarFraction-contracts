@@ -17,12 +17,17 @@ pub struct DistributionContract;
 #[contractimpl]
 impl DistributionContract {
     /// Initialize the contract with the admin, the property share token, and the rental yield (USDC) token.
+    ///
+    /// Requires authorization from `admin` so that a third party cannot
+    /// front-run deployment and appoint themselves admin.
     pub fn initialize(
         env: Env,
         admin: Address,
         share_token: Address,
         reward_token: Address,
     ) -> Result<(), Error> {
+        admin.require_auth();
+
         if storage::is_initialized(&env) {
             return Err(Error::AlreadyInitialized);
         }

@@ -114,6 +114,24 @@ fn test_full_dividend_distribution_flow() {
 }
 
 #[test]
+fn test_initialize_requires_admin_auth() {
+    // No mock_all_auths here: initialize must fail without the admin's
+    // authorization, otherwise anyone could front-run deployment and
+    // appoint themselves admin.
+    let env = Env::default();
+
+    let admin = Address::generate(&env);
+    let (share_token_id, _, _) = create_token(&env, &admin);
+    let (reward_token_id, _, _) = create_token(&env, &admin);
+
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    let unauthenticated = client.try_initialize(&admin, &share_token_id, &reward_token_id);
+    assert!(unauthenticated.is_err());
+}
+
+#[test]
 fn test_errors_and_boundaries() {
     let env = Env::default();
     env.mock_all_auths();
