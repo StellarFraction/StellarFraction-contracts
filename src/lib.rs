@@ -399,6 +399,16 @@ impl DistributionContract {
         storage::get_fee_collector(&env)
     }
 
+    /// Read-only: The full management-fee configuration as (fee_bps, collector).
+    /// `collector` is None until one is set. Convenience accessor so a client
+    /// can fetch the whole fee policy in a single call.
+    pub fn get_fee_config(env: Env) -> (u32, Option<Address>) {
+        (
+            storage::get_management_fee_bps(&env),
+            storage::get_fee_collector(&env),
+        )
+    }
+
     /// Admin-only: Rescue tokens accidentally sent to the contract.
     ///
     /// Hard-guarded so it can NEVER move the staked share token or the reward
