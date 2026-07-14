@@ -606,3 +606,23 @@ fn test_execution_footprint_within_limits() {
     // i.e. an order of magnitude below the ceiling.
     assert!(cpu * 10 < CPU_TX_LIMIT, "deposit CPU footprint has thin headroom: {}", cpu);
 }
+
+/// Issue #30 (section B): a foreign token accidentally sent to the contract
+/// can be swept out by the admin to any recipient, in full.
+#[test]
+fn test_recover_foreign_token_succeeds() {
+    let h = setup();
+    let stranger = Address::generate(&h.env);
+    let recipient = Address::generate(&h.env);
+
+    // A third, unrelated token gets mistakenly transferred into the contract.
+    let (foreign_id, foreign_token, foreign_admin) = create_token(&h.env, &h.admin);
+    foreign_admin.mint(&stranger, &5000);
+    foreign_token.transfer(&stranger, &h.contract_id, &5000);
+    assert_eq!(foreign_token.balance(&h.contract_id), 5000);
+
+    // Admin rescues it to a chosen recipient.
+    h.client().recover_token(&foreign_id, &recipient, &5000);
+    assert_eq!(foreign_token.balance(&recipient), 5000);
+    assert_eq!(foreign_token.balance(&h.contract_id), 0);
+}
