@@ -1,9 +1,16 @@
 #[cfg(test)]
 use super::*;
-use soroban_sdk::{
-    testutils::Address as _,
-    token, Address, Env,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, Env};
+
+fn register_token<'a>(
+    env: &'a Env,
+    admin: &Address,
+) -> (Address, token::StellarAssetClient<'a>) {
+    let contract = env.register_stellar_asset_contract_v2(admin.clone());
+    let address = contract.address();
+    let client = token::StellarAssetClient::new(env, &address);
+    (address, client)
+}
 
 #[test]
 fn test_full_dividend_distribution_flow() {
@@ -15,27 +22,27 @@ fn test_full_dividend_distribution_flow() {
     let user_b = Address::generate(&env);
 
     // 1. Register Mock Share and Reward Tokens (using built-in token simulator in testutils)
-    let share_token_id = env.register_token_contract(&admin);
+    let (share_token_id, share_token_admin) = register_token(&env, &admin);
     let share_token = token::Client::new(&env, &share_token_id);
-    
-    let reward_token_id = env.register_token_contract(&admin);
+
+    let (reward_token_id, reward_token_admin) = register_token(&env, &admin);
     let reward_token = token::Client::new(&env, &reward_token_id);
 
     // 2. Register the Distribution Contract
-    let contract_id = env.register_contract(None, DistributionContract);
+    let contract_id = env.register(DistributionContract, ());
     let client = DistributionContractClient::new(&env, &contract_id);
 
     // 3. Initialize Contract
-    client.initialize(&admin, &share_token_id, &reward_token_id).unwrap();
+    client.initialize(&admin, &share_token_id, &reward_token_id);
 
     // 4. Mint tokens to stakers and admin
-    share_token.mint(&user_a, &1000); // User A has 1000 deed tokens
-    share_token.mint(&user_b, &3000); // User B has 3000 deed tokens
-    reward_token.mint(&admin, &50000); // Admin has 50,000 USDC (reward tokens)
+    share_token_admin.mint(&user_a, &1000); // User A has 1000 deed tokens
+    share_token_admin.mint(&user_b, &3000); // User B has 3000 deed tokens
+    reward_token_admin.mint(&admin, &50000); // Admin has 50,000 USDC (reward tokens)
 
     // 5. Deposit Share Tokens (Staking)
-    client.deposit(&user_a, &1000).unwrap();
-    client.deposit(&user_b, &3000).unwrap();
+    client.deposit(&user_a, &1000);
+    client.deposit(&user_b, &3000);
 
     // Verify deposits
     assert_eq!(client.get_shares(&user_a), 1000);
@@ -45,7 +52,7 @@ fn test_full_dividend_distribution_flow() {
     assert_eq!(share_token.balance(&user_b), 0);
 
     // 6. First distribution of rewards (Admin distributes 4000 USDC)
-    client.distribute(&admin, &4000).unwrap();
+    client.distribute(&admin, &4000);
 
     // Verify pending rewards:
     // Total Shares = 4000
@@ -56,13 +63,13 @@ fn test_full_dividend_distribution_flow() {
     assert_eq!(client.get_pending(&user_b), 3000);
 
     // 7. User A claims rewards
-    let claimed_a = client.claim(&user_a).unwrap();
+    let claimed_a = client.claim(&user_a);
     assert_eq!(claimed_a, 1000);
     assert_eq!(reward_token.balance(&user_a), 1000);
     assert_eq!(client.get_pending(&user_a), 0);
 
     // 8. Second distribution (Admin distributes another 8000 USDC)
-    client.distribute(&admin, &8000).unwrap();
+    client.distribute(&admin, &8000);
 
     // Total Shares = 4000
     // AccRewardPerShare increases by 8000 * 1e12 / 4000 = 2e12.
@@ -74,7 +81,7 @@ fn test_full_dividend_distribution_flow() {
 
     // 9. User B withdraws 1500 shares (unstakes half)
     // This should auto-claim their pending 9000 USDC and set shares to 1500
-    client.withdraw(&user_b, &1500).unwrap();
+    client.withdraw(&user_b, &1500);
     
     assert_eq!(client.get_shares(&user_b), 1500);
     assert_eq!(reward_token.balance(&user_b), 9000);
@@ -86,7 +93,7 @@ fn test_full_dividend_distribution_flow() {
     // Total Shares = 2500
     // AccRewardPerShare increases by 5000 * 1e12 / 2500 = 2e12
     // Total AccRewardPerShare = 5e12
-    client.distribute(&admin, &5000).unwrap();
+    client.distribute(&admin, &5000);
 
     // User A pending: shares = 1000, debt = 1000 (after first claim, wait, no, after first claim,
     // their debt was set to shares * acc_reward_per_share = 1000 * 1e12 / 1e12 = 1000.
@@ -110,10 +117,10 @@ fn test_errors_and_boundaries() {
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
 
-    let share_token_id = env.register_token_contract(&admin);
-    let reward_token_id = env.register_token_contract(&admin);
+    let (share_token_id, _) = register_token(&env, &admin);
+    let (reward_token_id, _) = register_token(&env, &admin);
 
-    let contract_id = env.register_contract(None, DistributionContract);
+    let contract_id = env.register(DistributionContract, ());
     let client = DistributionContractClient::new(&env, &contract_id);
 
     // Try to deposit before initialization
@@ -121,7 +128,7 @@ fn test_errors_and_boundaries() {
     assert!(err_pre_init.is_err());
 
     // Initialize
-    client.initialize(&admin, &share_token_id, &reward_token_id).unwrap();
+    client.initialize(&admin, &share_token_id, &reward_token_id);
 
     // Try to initialize again
     let err_re_init = client.try_initialize(&admin, &share_token_id, &reward_token_id);
@@ -134,4 +141,34 @@ fn test_errors_and_boundaries() {
     // Try to withdraw more than staked
     let err_withdraw_insufficient = client.try_withdraw(&user, &100);
     assert!(err_withdraw_insufficient.is_err());
+}
+
+#[test]
+fn test_deposit_after_distribution_does_not_receive_historical_rewards() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let early_user = Address::generate(&env);
+    let late_user = Address::generate(&env);
+    let (share_token_id, share_token_admin) = register_token(&env, &admin);
+    let (reward_token_id, reward_token_admin) = register_token(&env, &admin);
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &share_token_id, &reward_token_id);
+    share_token_admin.mint(&early_user, &100);
+    share_token_admin.mint(&late_user, &100);
+    reward_token_admin.mint(&admin, &200);
+
+    client.deposit(&early_user, &100);
+    client.distribute(&admin, &100);
+    client.deposit(&late_user, &100);
+
+    assert_eq!(client.get_pending(&early_user), 100);
+    assert_eq!(client.get_pending(&late_user), 0);
+
+    client.distribute(&admin, &100);
+    assert_eq!(client.get_pending(&early_user), 150);
+    assert_eq!(client.get_pending(&late_user), 50);
 }
