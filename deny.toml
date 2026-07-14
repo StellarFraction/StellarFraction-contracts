@@ -25,3 +25,12 @@ allow = [
 ]
 # Require reasonably confident license detection before accepting a crate.
 confidence-threshold = 0.8
+
+[bans]
+# Warn when the dependency tree pulls several versions of the same crate,
+# which bloats the wasm; contract builds should keep this minimal.
+multiple-versions = "warn"
+# A wildcard ("*") version requirement is unsafe for a deployed contract.
+wildcards = "deny"
+# Crates explicitly disallowed, with a reason.
+deny = []
