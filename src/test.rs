@@ -192,6 +192,9 @@ fn test_multi_property_pool_flow() {
     let pool_id = client.create_pool(&manager, &share_token, &reward_token);
     assert_eq!(pool_id, 1);
     assert_eq!(client.get_pool_count(), 2);
+    let new_manager = Address::generate(&env);
+    client.set_pool_manager(&pool_id, &new_manager);
+    assert_eq!(client.get_pool(&pool_id).manager, new_manager);
 
     share_admin.mint(&user_a, &100);
     share_admin.mint(&user_b, &300);

@@ -83,6 +83,15 @@ impl DistributionContract {
         storage::get_next_pool_id(&env)
     }
 
+    /// Rotates the manager authorized to administer a property pool.
+    pub fn set_pool_manager(env: Env, pool_id: PoolId, new_manager: Address) -> Result<(), Error> {
+        let mut pool = Self::load_pool(&env, pool_id)?;
+        pool.manager.require_auth();
+        pool.manager = new_manager;
+        storage::set_pool(&env, pool_id, &pool);
+        Ok(())
+    }
+
     /// Read-only: Returns an investor's position in a property pool.
     pub fn get_position(env: Env, pool_id: PoolId, user: Address) -> Result<Position, Error> {
         Self::load_pool(&env, pool_id)?;
