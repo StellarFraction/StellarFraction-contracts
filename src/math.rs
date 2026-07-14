@@ -34,3 +34,8 @@ pub fn pending(shares: i128, index: i128, debt: i128) -> Result<i128, Error> {
         .ok_or(Error::ArithmeticOverflow)
 }
 
+/// Calculates the index increase per share for a reward distribution.
+pub fn reward_increase(amount: i128, total_shares: i128) -> Result<i128, Error> {
+    scale_div_mul(amount, total_shares)
+}
+
