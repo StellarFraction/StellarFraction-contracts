@@ -25,3 +25,12 @@ fn scale_div_mul(a: i128, b: i128) -> Result<i128, Error> {
 pub fn accumulated(shares: i128, index: i128) -> Result<i128, Error> {
     scale_mul_div(shares, index)
 }
+
+
+/// Calculates pending rewards: accumulated rewards minus already-recorded debt.
+pub fn pending(shares: i128, index: i128, debt: i128) -> Result<i128, Error> {
+    accumulated(shares, index)?
+        .checked_sub(debt)
+        .ok_or(Error::ArithmeticOverflow)
+}
+
