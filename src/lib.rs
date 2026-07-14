@@ -357,6 +357,22 @@ impl DistributionContract {
         storage::get_management_fee_bps(&env)
     }
 
+    /// Admin-only: Set the address that receives skimmed management fees
+    /// (e.g. the landlord / property manager treasury).
+    pub fn set_fee_collector(env: Env, collector: Address) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        storage::set_fee_collector(&env, &collector);
+        Ok(())
+    }
+
+    /// Read-only: The configured fee collector, if any has been set.
+    pub fn get_fee_collector(env: Env) -> Option<Address> {
+        storage::get_fee_collector(&env)
+    }
+
     /// Admin-only: Rescue tokens accidentally sent to the contract.
     ///
     /// Hard-guarded so it can NEVER move the staked share token or the reward
