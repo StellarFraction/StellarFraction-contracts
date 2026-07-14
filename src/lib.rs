@@ -523,3 +523,5 @@ impl DistributionContract {
 // Remove user share and debt keys from storage if balance reaches zero
 
 // Save updated user shares to storage if remaining balance is positive
+
+// Deduct withdrawn shares from global total shares to adjust pool size
