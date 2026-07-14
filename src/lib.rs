@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env};
 
 pub mod storage;
 pub mod types;
@@ -10,6 +10,20 @@ mod test;
 use crate::types::Error;
 
 const SCALE_FACTOR: i128 = 1_000_000_000_000; // 1e12 for precision
+
+/// On-chain contract version, surfaced both in embedded wasm metadata and via
+/// the `version()` entrypoint so tooling and clients agree on a single source.
+pub const CONTRACT_VERSION: &str = "0.1.0";
+
+// Metadata embedded directly into the compiled wasm. Explorers and tooling can
+// read these ledger entries without invoking the contract.
+contractmeta!(key = "name", val = "StellarFraction Distribution");
+contractmeta!(key = "version", val = "0.1.0");
+contractmeta!(
+    key = "description",
+    val = "O(1) proportional rental-yield distribution for fractional real estate stakers"
+);
+contractmeta!(key = "repository", val = "github.com/StellarFraction/StellarFraction-contracts");
 
 #[contract]
 pub struct DistributionContract;
