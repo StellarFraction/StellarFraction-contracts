@@ -495,3 +495,5 @@ impl DistributionContract {
 // Calculate new shares total by adding current amount to the deposit value
 
 // Save updated user shares count to persistent contract storage index
+
+// Fetch global total shares to add newly deposited shares to pool sum
