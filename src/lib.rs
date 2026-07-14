@@ -336,6 +336,27 @@ impl DistributionContract {
         storage::get_unlock_at(&env, &user)
     }
 
+    /// Admin-only: Set the landlord management fee in basis points (1 bps =
+    /// 0.01%, so 10000 bps = 100%). Rejected above 10000. A fee of 0 disables
+    /// the skim. The fee is only applied on distribute once a collector is set.
+    pub fn set_management_fee(env: Env, bps: u32) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        if bps > 10_000 {
+            return Err(Error::InvalidFeeBps);
+        }
+
+        storage::set_management_fee_bps(&env, bps);
+        Ok(())
+    }
+
+    /// Read-only: Current management fee in basis points (0 = disabled).
+    pub fn get_management_fee(env: Env) -> u32 {
+        storage::get_management_fee_bps(&env)
+    }
+
     /// Admin-only: Rescue tokens accidentally sent to the contract.
     ///
     /// Hard-guarded so it can NEVER move the staked share token or the reward
