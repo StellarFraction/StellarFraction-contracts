@@ -1,8 +1,8 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
-pub mod types;
 pub mod storage;
+pub mod types;
 
 #[cfg(test)]
 mod test;
@@ -17,12 +17,17 @@ pub struct DistributionContract;
 #[contractimpl]
 impl DistributionContract {
     /// Initialize the contract with the admin, the property share token, and the rental yield (USDC) token.
+    ///
+    /// Requires authorization from `admin` so that a third party cannot
+    /// front-run deployment and appoint themselves admin.
     pub fn initialize(
         env: Env,
         admin: Address,
         share_token: Address,
         reward_token: Address,
     ) -> Result<(), Error> {
+        admin.require_auth();
+
         if storage::is_initialized(&env) {
             return Err(Error::AlreadyInitialized);
         }
@@ -220,7 +225,7 @@ impl DistributionContract {
         }
         let acc_reward_per_share = storage::get_acc_reward_per_share(env);
         let debt = storage::get_user_debt(env, user);
-        
+
         let accumulated = (shares * acc_reward_per_share) / SCALE_FACTOR;
         accumulated - debt
     }
