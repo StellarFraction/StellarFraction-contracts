@@ -265,3 +265,35 @@ fn test_reward_math_no_overflow_at_scale() {
     h.client().distribute(&h.admin, &big_stake);
     assert_eq!(h.client().get_pending(&whale), big_stake * 2);
 }
+
+/// Issue #23: with integer division the contract must always round *down*
+/// so it can never distribute more reward than was deposited. Three stakers
+/// each hold 1 share; a 2-unit distribution can't be split evenly, so the
+/// per-share increment truncates and every micro-entitlement rounds to zero
+/// (the 2 units of dust stay in the contract). A later 3-unit distribution
+/// divides cleanly and each staker becomes owed exactly 1.
+#[test]
+fn test_precision_rounding_micro_investments() {
+    let h = setup();
+    let a = Address::generate(&h.env);
+    let b = Address::generate(&h.env);
+    let c = Address::generate(&h.env);
+    for u in [&a, &b, &c] {
+        h.share_admin().mint(u, &1);
+        h.client().deposit(u, &1);
+    }
+    h.reward_admin().mint(&h.admin, &100);
+
+    // 2 units across 3 shares -> per-share increment truncates, all pending 0.
+    h.client().distribute(&h.admin, &2);
+    let pending_sum = h.client().get_pending(&a)
+        + h.client().get_pending(&b)
+        + h.client().get_pending(&c);
+    assert_eq!(pending_sum, 0, "rounding must never over-pay stakers");
+
+    // 3 units across 3 shares divides cleanly -> each owed exactly 1.
+    h.client().distribute(&h.admin, &3);
+    assert_eq!(h.client().get_pending(&a), 1);
+    assert_eq!(h.client().get_pending(&b), 1);
+    assert_eq!(h.client().get_pending(&c), 1);
+}
