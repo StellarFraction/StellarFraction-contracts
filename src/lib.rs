@@ -509,3 +509,5 @@ impl DistributionContract {
 // Withdraw function allows users to unstake their property share tokens
 
 // Enforce user auth check to prevent unauthorized withdrawals from account
+
+// Validate that the withdraw amount is greater than zero before processing
