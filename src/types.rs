@@ -22,4 +22,5 @@ pub enum Error {
     NoSharesStaked = 4,
     InvalidAmount = 5,
     NotAdmin = 6,
+    ArithmeticOverflow = 7,
 }
