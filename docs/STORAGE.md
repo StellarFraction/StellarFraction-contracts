@@ -52,3 +52,23 @@ would make the instance grow without limit and force every caller to pay rent
 proportional to the entire user set. Keeping each user's data in its own
 persistent entry means a staker only ever pays rent for **their own** slot, and
 the global config bucket stays constant-size no matter how many stakers join.
+
+## The O(1) accumulator — the biggest gas win
+
+A naive dividend contract loops over every staker on each distribution, writing
+one storage entry per staker — an **O(n)** cost that grows unbounded and can
+exceed the transaction budget once the pool is large.
+
+This contract instead uses the **reward-per-share accumulator** pattern:
+
+- `distribute` adds `amount * SCALE / total_shares` to a single
+  `AccRewardPerShare` value — **one** storage write, regardless of staker count.
+- Each user's entitlement is derived lazily on read:
+  `pending = shares * AccRewardPerShare / SCALE - debt`.
+- `deposit` / `withdraw` / `claim` touch only the **caller's** entries plus the
+  shared accumulator.
+
+**Result:** every mutating call writes a bounded, constant number of storage
+entries. Distribution cost does not scale with the number of stakers — see
+`test_benchmark_reward_math_is_constant`, which shows a 10× larger pool costs
+well under 2× per distribution.
