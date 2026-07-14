@@ -946,3 +946,28 @@ fn test_fee_rounds_down() {
     // Staker gets the remainder (15_000 - 1), dust included.
     assert_eq!(h.client().get_pending(&user), 14_999);
 }
+
+/// Issue #35 (section E): the version() and metadata() accessors return the
+/// expected identity, and the version string is consistent across both.
+#[test]
+fn test_contract_metadata_accessors() {
+    use soroban_sdk::String;
+    let h = setup();
+
+    let expected_version = String::from_str(&h.env, "0.1.0");
+    assert_eq!(h.client().version(), expected_version);
+
+    let md = h.client().metadata();
+    assert_eq!(md.name, String::from_str(&h.env, "StellarFraction Distribution"));
+    assert_eq!(md.version, expected_version);
+    assert_eq!(
+        md.description,
+        String::from_str(
+            &h.env,
+            "O(1) proportional rental-yield distribution for fractional real estate stakers"
+        )
+    );
+
+    // version() and metadata().version must agree.
+    assert_eq!(h.client().version(), md.version);
+}
