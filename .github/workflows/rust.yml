@@ -1,0 +1,44 @@
+name: Smart Contract CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Build and Test Contracts
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+        targets: wasm32-unknown-unknown
+        components: rustfmt, clippy
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Verify Code Formatting
+      run: cargo fmt --check
+
+    - name: Run Clippy Lints
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Compile WASM target
+      run: cargo build --target wasm32-unknown-unknown --release
+
+    - name: Execute Smart Contract Tests
+      run: cargo test
