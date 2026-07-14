@@ -19,3 +19,9 @@ fn scale_div_mul(a: i128, b: i128) -> Result<i128, Error> {
         .ok_or(Error::ArithmeticOverflow)
 }
 
+// ── Domain-specific functions ─────────────────────────────────────
+
+/// Calculates accumulated rewards for a user's shares at the current index.
+pub fn accumulated(shares: i128, index: i128) -> Result<i128, Error> {
+    scale_mul_div(shares, index)
+}
