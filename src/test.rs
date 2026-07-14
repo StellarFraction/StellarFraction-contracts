@@ -407,3 +407,98 @@ fn test_staker_share_withdrawals() {
     let (_, _, _, total_after_full, _) = h.client().get_contract_info();
     assert_eq!(total_after_full, 0);
 }
+
+/// Deterministic xorshift PRNG - keeps the fuzz test reproducible with no
+/// external dependency (proptest/rand don't fit a no_std contract crate).
+fn next_rand(state: &mut u64) -> u64 {
+    let mut x = *state;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    *state = x;
+    x
+}
+
+/// Issue #27: fuzz the staking reward pool with randomized sequences of
+/// deposit / withdraw / distribute / claim across several actors, asserting the
+/// core invariants hold after every operation regardless of ordering:
+///   (I1) global total_shares == sum of individual staked shares
+///   (I2) contract's share custody balance == total_shares
+///   (I3) reward-token conservation: every distributed unit is either still
+///        held by the contract or has been paid out to a staker - none is ever
+///        minted or destroyed by the accounting.
+///
+/// All mutating calls go through `try_*`; any operation the contract rejects
+/// (e.g. a rounding-dust shortfall on an auto-claim) rolls back cleanly and is
+/// simply skipped, so the fuzzer only advances through valid on-chain states.
+#[test]
+fn test_fuzz_reward_pool_invariants() {
+    let h = setup();
+    let users = [
+        Address::generate(&h.env),
+        Address::generate(&h.env),
+        Address::generate(&h.env),
+        Address::generate(&h.env),
+    ];
+
+    // Fund everyone generously up front.
+    for u in &users {
+        h.share_admin().mint(u, &1_000_000);
+    }
+    h.reward_admin().mint(&h.admin, &10_000_000);
+
+    let mut rng: u64 = 0x9E3779B97F4A7C15;
+    let mut total_distributed: i128 = 0;
+
+    for _ in 0..250 {
+        let action = next_rand(&mut rng) % 4;
+        let user = &users[(next_rand(&mut rng) % users.len() as u64) as usize];
+        let amount = ((next_rand(&mut rng) % 5000) + 1) as i128;
+
+        match action {
+            0 => {
+                let free = h.share_token().balance(user);
+                if amount <= free {
+                    let _ = h.client().try_deposit(user, &amount);
+                }
+            }
+            1 => {
+                let staked = h.client().get_shares(user);
+                if amount <= staked {
+                    let _ = h.client().try_withdraw(user, &amount);
+                }
+            }
+            2 => {
+                let (_, _, _, total_shares, _) = h.client().get_contract_info();
+                if total_shares > 0 && h.client().try_distribute(&h.admin, &amount).is_ok() {
+                    total_distributed += amount;
+                }
+            }
+            _ => {
+                let _ = h.client().try_claim(user);
+            }
+        }
+
+        // (I1) + (I2): share custody mirrors the summed ledger.
+        let (_, _, _, total_shares, _) = h.client().get_contract_info();
+        let summed: i128 = users.iter().map(|u| h.client().get_shares(u)).sum();
+        assert_eq!(total_shares, summed, "I1: total_shares desync");
+        assert_eq!(
+            h.share_token().balance(&h.contract_id),
+            total_shares,
+            "I2: custody balance desync"
+        );
+
+        // (I3): reward-token conservation across the whole system.
+        let contract_reward = h.reward_token().balance(&h.contract_id);
+        let paid_out: i128 = users.iter().map(|u| h.reward_token().balance(u)).sum();
+        assert_eq!(
+            contract_reward + paid_out,
+            total_distributed,
+            "I3: reward conservation broken (held {} + paid {} != distributed {})",
+            contract_reward,
+            paid_out,
+            total_distributed
+        );
+    }
+}
