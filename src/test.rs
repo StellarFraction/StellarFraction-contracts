@@ -647,3 +647,27 @@ fn test_recover_rejects_share_token() {
     h.client().withdraw(&user, &1000);
     assert_eq!(h.share_token().balance(&user), 1000);
 }
+
+/// Issue #30 (section D): the reward token holds dividends owed to stakers, so
+/// it must also be un-recoverable - the admin cannot claw back distributed
+/// rewards before stakers claim them.
+#[test]
+fn test_recover_rejects_reward_token() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    let recipient = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+    h.reward_admin().mint(&h.admin, &10_000);
+    h.client().deposit(&user, &1000);
+    h.client().distribute(&h.admin, &5000);
+
+    // 5000 reward tokens are now owed to the staker; admin must not reclaim them.
+    let reward_id = h.reward_token().address;
+    let res = h.client().try_recover_token(&reward_id, &recipient, &5000);
+    assert!(res.is_err(), "reward-token recovery must be rejected");
+
+    // Rewards remain and the staker can still claim their full entitlement.
+    assert_eq!(h.reward_token().balance(&h.contract_id), 5000);
+    assert_eq!(h.client().claim(&user), 5000);
+    assert_eq!(h.reward_token().balance(&user), 5000);
+}
