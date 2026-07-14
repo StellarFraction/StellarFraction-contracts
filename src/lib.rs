@@ -139,6 +139,36 @@ impl DistributionContract {
         Self::calculate_pool_pending(&pool, &position)
     }
 
+    /// Funds and distributes rewards within a selected property pool.
+    pub fn distribute_to(
+        env: Env,
+        pool_id: PoolId,
+        sender: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        sender.require_auth();
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let mut pool = Self::load_pool(&env, pool_id)?;
+        if pool.total_shares == 0 {
+            return Err(Error::NoSharesStaked);
+        }
+        token::Client::new(&env, &pool.reward_token).transfer(
+            &sender,
+            &env.current_contract_address(),
+            &amount,
+        );
+        let increase = math::reward_increase(amount, pool.total_shares)?;
+        pool.acc_reward_per_share = pool
+            .acc_reward_per_share
+            .checked_add(increase)
+            .ok_or(Error::ArithmeticOverflow)?;
+        storage::set_pool(&env, pool_id, &pool);
+        Ok(())
+    }
+
     /// Deposits real estate share tokens to stake them and earn dividends.
     pub fn deposit(env: Env, user: Address, amount: i128) -> Result<(), Error> {
         user.require_auth();
