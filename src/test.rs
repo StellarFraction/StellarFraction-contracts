@@ -710,3 +710,25 @@ fn test_lockup_blocks_early_withdraw() {
     );
     assert_eq!(h.client().get_shares(&user), 1000);
 }
+
+/// Issue #32 (section B): once the lock window elapses the stake becomes
+/// withdrawable again. Exactly at the unlock timestamp it must succeed
+/// (the guard is strictly "before unlock").
+#[test]
+fn test_lockup_allows_withdraw_after_expiry() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+
+    let lockup: u64 = 7 * 24 * 3600;
+    h.client().set_lockup_duration(&lockup);
+    h.env.ledger().set_timestamp(1000);
+    h.client().deposit(&user, &1000);
+
+    // Advance to exactly the unlock timestamp (1000 + lockup).
+    h.env.ledger().set_timestamp(1000 + lockup);
+    h.client().withdraw(&user, &1000);
+
+    assert_eq!(h.client().get_shares(&user), 0);
+    assert_eq!(h.share_token().balance(&user), 1000);
+}
