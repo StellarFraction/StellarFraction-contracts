@@ -485,3 +485,5 @@ impl DistributionContract {
 // Fetch reward token address from contract storage to handle pending claims
 
 // Calculate any pending rewards to be automatically claimed during deposit
+
+// Transfer accumulated dividends to user if they have claimable balances
