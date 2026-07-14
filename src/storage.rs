@@ -98,3 +98,40 @@ pub fn remove_user_debt(env: &Env, user: &Address) {
         .persistent()
         .remove(&DataKey::UserDebt(user.clone()));
 }
+
+pub fn is_paused(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
+}
+
+pub fn set_paused(env: &Env, paused: bool) {
+    env.storage().instance().set(&DataKey::Paused, &paused);
+}
+
+pub fn get_minimum_deposit(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::MinimumDeposit)
+        .unwrap_or(1)
+}
+
+pub fn set_minimum_deposit(env: &Env, amount: i128) {
+    env.storage()
+        .instance()
+        .set(&DataKey::MinimumDeposit, &amount);
+}
+
+pub fn get_max_stake_per_user(env: &Env, user: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::MaxStakePerUser(user.clone()))
+        .unwrap_or(i128::MAX)
+}
+
+pub fn set_max_stake_per_user(env: &Env, user: &Address, limit: i128) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::MaxStakePerUser(user.clone()), &limit);
+}
