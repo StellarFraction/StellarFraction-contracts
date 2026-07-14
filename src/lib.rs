@@ -515,3 +515,5 @@ impl DistributionContract {
 // Verify user has sufficient shares to fulfill the withdrawal request
 
 // Calculate and auto-claim pending dividends before executing unstake
+
+// Transfer share tokens back to user's wallet address from contract balance
