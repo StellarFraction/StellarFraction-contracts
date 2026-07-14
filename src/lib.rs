@@ -9,7 +9,7 @@ pub mod types;
 #[cfg(test)]
 mod test;
 
-use crate::types::{ContractMetadata, Error, Pool, PoolId, Position};
+use crate::types::{Error, Pool, PoolId, Position};
 
 /// On-chain contract version, surfaced both in embedded wasm metadata and via
 /// the `version()` entrypoint so tooling and clients agree on a single source.
