@@ -353,6 +353,12 @@ impl DistributionContract {
         storage::is_paused(&env)
     }
 
+    /// Read-only: The contract's semantic version string. Backed by the same
+    /// CONTRACT_VERSION constant embedded in the wasm metadata.
+    pub fn version(env: Env) -> soroban_sdk::String {
+        soroban_sdk::String::from_str(&env, CONTRACT_VERSION)
+    }
+
     /// Admin-only: Set the staking lockup duration (in seconds). New deposits
     /// lock the depositor's stake for this long before it can be withdrawn.
     /// A duration of 0 disables lockups entirely.
