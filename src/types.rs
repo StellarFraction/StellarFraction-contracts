@@ -1,4 +1,15 @@
-use soroban_sdk::{contracterror, contracttype, Address};
+use soroban_sdk::{contracterror, contracttype, Address, String};
+
+/// Structured, on-chain-readable identity for the contract, returned by the
+/// `metadata()` entrypoint. Mirrors the embedded wasm `contractmeta!` values in
+/// a form clients can fetch in a single call.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractMetadata {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+}
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
