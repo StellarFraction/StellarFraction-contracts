@@ -132,6 +132,13 @@ impl DistributionContract {
         Ok(())
     }
 
+    /// Read-only: Returns claimable rewards in a selected property pool.
+    pub fn get_pool_pending(env: Env, pool_id: PoolId, user: Address) -> Result<i128, Error> {
+        let pool = Self::load_pool(&env, pool_id)?;
+        let position = storage::get_position(&env, pool_id, &user);
+        Self::calculate_pool_pending(&pool, &position)
+    }
+
     /// Deposits real estate share tokens to stake them and earn dividends.
     pub fn deposit(env: Env, user: Address, amount: i128) -> Result<(), Error> {
         user.require_auth();
