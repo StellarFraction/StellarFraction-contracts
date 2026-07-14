@@ -503,3 +503,5 @@ impl DistributionContract {
 // Fetch global reward accumulator index to compute new user reward debt
 
 // Calculate new user reward debt based on updated shares and global index
+
+// Save user reward debt to storage to mark previous dividends as claimed
