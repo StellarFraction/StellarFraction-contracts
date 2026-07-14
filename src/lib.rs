@@ -487,3 +487,5 @@ impl DistributionContract {
 // Calculate any pending rewards to be automatically claimed during deposit
 
 // Transfer accumulated dividends to user if they have claimable balances
+
+// Transfer staking shares from user account to contract address securely
