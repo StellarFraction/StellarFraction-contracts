@@ -465,3 +465,5 @@ impl DistributionContract {
 // Store property share token address in persistent storage for stakers check
 
 // Store reward token address in persistent storage for dividend distributions
+
+// Set accumulated reward per share to zero initially for global index tracker
