@@ -12,3 +12,10 @@ fn scale_mul_div(a: i128, b: i128) -> Result<i128, Error> {
         .ok_or(Error::ArithmeticOverflow)
 }
 
+/// Divides `a` by `b` then multiplies by SCALE, checking overflow at each step.
+fn scale_div_mul(a: i128, b: i128) -> Result<i128, Error> {
+    a.checked_mul(SCALE)
+        .and_then(|p| p.checked_div(b))
+        .ok_or(Error::ArithmeticOverflow)
+}
+
