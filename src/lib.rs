@@ -531,3 +531,5 @@ impl DistributionContract {
 // Enforce authorization requirement on sender for rent distribution
 
 // Validate that the distributed amount is positive and non-zero value
+
+// Throw error if distribute is triggered when no shares are staked in pool
