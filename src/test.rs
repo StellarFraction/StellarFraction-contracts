@@ -783,3 +783,25 @@ fn test_lockup_zero_allows_immediate_withdraw() {
     h.client().withdraw(&user, &1000);
     assert_eq!(h.share_token().balance(&user), 1000);
 }
+
+/// Issue #32 (section E): get_unlock_time reports exactly deposit-time +
+/// lockup-duration for a locked position, and is unaffected by later changes
+/// to the global lockup setting (existing positions keep their stamped time).
+#[test]
+fn test_unlock_time_reporting() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+
+    h.client().set_lockup_duration(&3600); // 1 hour
+    h.env.ledger().set_timestamp(50_000);
+    h.client().deposit(&user, &1000);
+
+    // Reports deposit time (50_000) + duration (3600).
+    assert_eq!(h.client().get_unlock_time(&user), 53_600);
+
+    // Changing the global duration afterwards does not retro-actively move an
+    // already-stamped position's unlock time.
+    h.client().set_lockup_duration(&99_999);
+    assert_eq!(h.client().get_unlock_time(&user), 53_600);
+}
