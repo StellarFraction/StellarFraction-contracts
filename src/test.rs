@@ -887,3 +887,39 @@ fn test_fee_without_collector_rejected() {
     // Nothing was distributed while misconfigured.
     assert_eq!(h.client().get_pending(&user), 0);
 }
+
+/// Issue #34 (section D): reward tokens are conserved across a fee-bearing
+/// distribution - every distributed unit ends up either paid to the collector,
+/// claimed by a staker, or still held by the contract for unclaimed pending.
+#[test]
+fn test_fee_distribution_conserves_tokens() {
+    let h = setup();
+    let a = Address::generate(&h.env);
+    let b = Address::generate(&h.env);
+    let collector = Address::generate(&h.env);
+
+    h.share_admin().mint(&a, &1000);
+    h.share_admin().mint(&b, &3000);
+    h.reward_admin().mint(&h.admin, &10_000);
+    h.client().deposit(&a, &1000);
+    h.client().deposit(&b, &3000);
+
+    h.client().set_management_fee(&250); // 2.5%
+    h.client().set_fee_collector(&collector);
+
+    let amount = 10_000;
+    h.client().distribute(&h.admin, &amount);
+
+    // a claims; b leaves theirs pending.
+    let claimed_a = h.client().claim(&a);
+
+    let collector_bal = h.reward_token().balance(&collector);
+    let a_bal = h.reward_token().balance(&a);
+    let contract_bal = h.reward_token().balance(&h.contract_id);
+
+    // Conservation: fee + claimed + still-held == the full distributed amount.
+    assert_eq!(collector_bal + a_bal + contract_bal, amount);
+    assert_eq!(a_bal, claimed_a);
+    // Fee is exactly 2.5% of 10_000.
+    assert_eq!(collector_bal, 250);
+}
