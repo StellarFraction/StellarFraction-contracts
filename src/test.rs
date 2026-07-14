@@ -327,3 +327,43 @@ fn test_single_staker_deposit() {
     let (_, _, _, total_shares, _) = h.client().get_contract_info();
     assert_eq!(total_shares, 1000);
 }
+
+/// Issue #25: distributions must split strictly in proportion to each staker's
+/// share of the pool, and successive distributions accumulate independently of
+/// when each staker joined. Uses a 1:3:6 split so a 10k distribution maps to
+/// clean 1k / 3k / 6k entitlements, then adds a late joiner before a second
+/// distribution to confirm the accumulator only rewards shares present at the
+/// time of each distribution.
+#[test]
+fn test_multiple_staker_distribution() {
+    let h = setup();
+    let a = Address::generate(&h.env);
+    let b = Address::generate(&h.env);
+    let c = Address::generate(&h.env);
+
+    h.share_admin().mint(&a, &1000);
+    h.share_admin().mint(&b, &3000);
+    h.share_admin().mint(&c, &6000);
+    h.reward_admin().mint(&h.admin, &50_000);
+
+    h.client().deposit(&a, &1000);
+    h.client().deposit(&b, &3000);
+    // c has not joined yet.
+
+    // First distribution over 4000 shares (a + b), 1:3 split of 4000.
+    h.client().distribute(&h.admin, &4000);
+    assert_eq!(h.client().get_pending(&a), 1000);
+    assert_eq!(h.client().get_pending(&b), 3000);
+    assert_eq!(h.client().get_pending(&c), 0);
+
+    // c joins; now pool is 1000:3000:6000 = 10000 shares.
+    h.client().deposit(&c, &6000);
+
+    // Second distribution over 10000 shares: a=1000, b=3000, c=6000.
+    h.client().distribute(&h.admin, &10_000);
+    // a and b carry their first-round entitlement forward.
+    assert_eq!(h.client().get_pending(&a), 1000 + 1000);
+    assert_eq!(h.client().get_pending(&b), 3000 + 3000);
+    // c only earns from the round it was present for.
+    assert_eq!(h.client().get_pending(&c), 6000);
+}
