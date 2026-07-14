@@ -114,5 +114,45 @@ staker custody and owed dividends respectively. Attempting either returns
 `CannotRecoverProtocolToken`, so admin can never sweep user funds. Only
 unrelated tokens accidentally transferred in can be recovered.
 
+---
+
+## Read-only accessors
+
+| Entrypoint | Returns |
+|------------|---------|
+| `get_shares(user)` | Staked share balance. |
+| `get_debt(user)` | Reward-debt baseline. |
+| `get_pending(user)` | Claimable dividends right now. |
+| `get_contract_info()` | `(admin, share_token, reward_token, total_shares, acc_reward_per_share)`. |
+| `is_paused()` | Whether deposits are halted. |
+| `get_lockup_duration()` | Lockup seconds (`0` = disabled). |
+| `get_unlock_time(user)` | Ledger timestamp the stake unlocks (`0` = none). |
+| `get_management_fee()` | Fee in basis points. |
+| `get_fee_collector()` | `Option<Address>` collector. |
+| `get_fee_config()` | `(fee_bps, Option<collector>)`. |
+| `version()` | Semantic version string. |
+| `metadata()` | `{ name, version, description }`. |
+
+---
+
+## Error reference
+
+| Code | Error | Raised when |
+|-----:|-------|-------------|
+| 1 | `AlreadyInitialized` | `initialize` called twice. |
+| 2 | `NotInitialized` | Any operation before `initialize`. |
+| 3 | `InsufficientShares` | Withdraw exceeds staked balance. |
+| 4 | `NoSharesStaked` | Distribute with an empty pool. |
+| 5 | `InvalidAmount` | Non-positive amount. |
+| 6 | `NotAdmin` | Admin-only call by a non-admin. |
+| 7 | `ContractPaused` | Deposit while paused. |
+| 8 | `BelowMinimumDeposit` | Deposit under the minimum. |
+| 9 | `ExceedsMaxStake` | Deposit over the per-user cap. |
+| 10 | `CannotRecoverProtocolToken` | `recover_token` on share/reward token. |
+| 11 | `StillLocked` | Withdraw before lockup expiry. |
+| 12 | `InvalidFeeBps` | Fee set above 10000 bps. |
+| 13 | `FeeCollectorNotSet` | Distribute with a fee but no collector. |
+
+
 
 
