@@ -467,3 +467,5 @@ impl DistributionContract {
 // Store reward token address in persistent storage for dividend distributions
 
 // Set accumulated reward per share to zero initially for global index tracker
+
+// Set total staked shares to zero initially to represent empty pool state
