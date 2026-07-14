@@ -30,6 +30,9 @@ pub enum DataKey {
     UserShare(Address), // Amount of deed tokens staked by a user
     UserDebt(Address),  // Reward debt for a user
     Initialized,
+    NextPoolId,
+    Pool(PoolId),
+    Position(PoolId, Address),
 }
 
 #[contracterror]
