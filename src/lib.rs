@@ -529,3 +529,5 @@ impl DistributionContract {
 // Distribute function allows admin or users to deposit USDC rent to stakers
 
 // Enforce authorization requirement on sender for rent distribution
+
+// Validate that the distributed amount is positive and non-zero value
