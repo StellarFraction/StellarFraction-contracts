@@ -299,6 +299,23 @@ impl DistributionContract {
         storage::is_paused(&env)
     }
 
+    /// Admin-only: Set the staking lockup duration (in seconds). New deposits
+    /// lock the depositor's stake for this long before it can be withdrawn.
+    /// A duration of 0 disables lockups entirely.
+    pub fn set_lockup_duration(env: Env, seconds: u64) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        storage::set_lockup_duration(&env, seconds);
+        Ok(())
+    }
+
+    /// Read-only: Current staking lockup duration in seconds (0 = disabled).
+    pub fn get_lockup_duration(env: Env) -> u64 {
+        storage::get_lockup_duration(&env)
+    }
+
     /// Admin-only: Rescue tokens accidentally sent to the contract.
     ///
     /// Hard-guarded so it can NEVER move the staked share token or the reward
