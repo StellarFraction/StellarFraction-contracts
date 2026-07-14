@@ -54,3 +54,8 @@ pub fn distributed(env: &Env, pool_id: PoolId, sender: &Address, amount: i128) {
 pub fn claimed(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
     emit(env, CLAIM, [pool_id, user.clone()], amount);
 }
+
+
+pub fn withdrawn(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
+    emit(env, WITHDRAW, [pool_id, user.clone()], amount);
+}
