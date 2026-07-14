@@ -118,6 +118,12 @@ impl DistributionContract {
             return Err(Error::InsufficientShares);
         }
 
+        // Enforce the staking lockup: the position cannot be withdrawn until
+        // its unlock timestamp has passed.
+        if env.ledger().timestamp() < storage::get_unlock_at(&env, &user) {
+            return Err(Error::StillLocked);
+        }
+
         let share_token_addr = storage::get_share_token(&env);
         let reward_token_addr = storage::get_reward_token(&env);
 
