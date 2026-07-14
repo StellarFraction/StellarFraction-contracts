@@ -14,6 +14,8 @@ pub enum DataKey {
     Paused,             // Contract pause status
     MinimumDeposit,     // Minimum deposit amount
     MaxStakePerUser(Address), // Maximum stake limit per user
+    LockupDuration,     // Seconds a deposit is locked before it can be withdrawn
+    UnlockAt(Address),  // Ledger timestamp at which a user's stake unlocks
 }
 
 #[contracterror]
@@ -29,4 +31,5 @@ pub enum Error {
     BelowMinimumDeposit = 8,
     ExceedsMaxStake = 9,
     CannotRecoverProtocolToken = 10,
+    StillLocked = 11,
 }

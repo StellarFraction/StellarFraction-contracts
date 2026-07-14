@@ -135,3 +135,29 @@ pub fn set_max_stake_per_user(env: &Env, user: &Address, limit: i128) {
         .persistent()
         .set(&DataKey::MaxStakePerUser(user.clone()), &limit);
 }
+
+pub fn get_lockup_duration(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::LockupDuration)
+        .unwrap_or(0)
+}
+
+pub fn set_lockup_duration(env: &Env, seconds: u64) {
+    env.storage()
+        .instance()
+        .set(&DataKey::LockupDuration, &seconds);
+}
+
+pub fn get_unlock_at(env: &Env, user: &Address) -> u64 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::UnlockAt(user.clone()))
+        .unwrap_or(0)
+}
+
+pub fn set_unlock_at(env: &Env, user: &Address, ts: u64) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::UnlockAt(user.clone()), &ts);
+}
