@@ -455,3 +455,5 @@ impl DistributionContract {
 }
 
 // StellarFraction distribution contract - handles real estate dividend payouts
+
+// Scale factor configured to 1e12 for high-precision arithmetic representation
