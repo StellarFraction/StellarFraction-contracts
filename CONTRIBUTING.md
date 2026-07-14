@@ -38,6 +38,14 @@ Please be respectful, professional, and collaborative in all communication and c
   ```bash
   cargo test
   ```
+- **Security auditing:** Before opening a PR, scan dependencies for known
+  advisories and policy violations. Configuration lives in `.cargo/audit.toml`
+  and `deny.toml`:
+  ```bash
+  cargo install cargo-audit cargo-deny   # one-time
+  cargo audit                            # RustSec advisory scan
+  cargo deny check                       # advisories, licenses, bans, sources
+  ```
 
 #### React (Frontend)
 - **Code Style:** We use ESLint and Prettier. Run the linter to verify formatting:

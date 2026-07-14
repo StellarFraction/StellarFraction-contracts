@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env, Vec};
 
 pub mod events;
 pub mod math;
@@ -9,7 +9,24 @@ pub mod types;
 #[cfg(test)]
 mod test;
 
-use crate::types::{Error, Pool, PoolId, Position};
+use crate::types::{ContractMetadata, Error, Pool, PoolId, Position};
+
+/// On-chain contract version, surfaced both in embedded wasm metadata and via
+/// the `version()` entrypoint so tooling and clients agree on a single source.
+pub const CONTRACT_VERSION: &str = "0.1.0";
+
+// Metadata embedded directly into the compiled wasm. Explorers and tooling can
+// read these ledger entries without invoking the contract.
+contractmeta!(key = "name", val = "StellarFraction Distribution");
+contractmeta!(key = "version", val = "0.1.0");
+contractmeta!(
+    key = "description",
+    val = "O(1) proportional rental-yield distribution for fractional real estate stakers"
+);
+contractmeta!(
+    key = "repository",
+    val = "github.com/StellarFraction/StellarFraction-contracts"
+);
 
 #[contract]
 pub struct DistributionContract;
@@ -167,6 +184,15 @@ impl DistributionContract {
 
         storage::set_position(&env, pool_id, &user, &position);
         storage::set_pool(&env, pool_id, &pool);
+
+        // Refresh the lockup: each deposit restarts the lock window so a
+        // fresh top-up can't be used to sidestep the configured lockup.
+        let lockup = storage::get_lockup_duration(&env);
+        if lockup > 0 {
+            let unlock_at = env.ledger().timestamp() + lockup;
+            storage::set_unlock_at(&env, &user, unlock_at);
+        }
+
         events::deposited(&env, pool_id, &user, amount);
         Ok(())
     }
@@ -196,18 +222,46 @@ impl DistributionContract {
         if pool.total_shares == 0 {
             return Err(Error::NoSharesStaked);
         }
-        token::Client::new(&env, &pool.reward_token).transfer(
-            &sender,
-            &env.current_contract_address(),
-            &amount,
-        );
-        let increase = math::reward_increase(amount, pool.total_shares)?;
+
+        let reward_client = token::Client::new(&env, &pool.reward_token);
+
+        // 1. Pull the full amount from the sender into the contract.
+        reward_client.transfer(&sender, &env.current_contract_address(), &amount);
+
+        // 2. Skim the landlord management fee (if configured) off the top and
+        //    forward it to the collector. Only the remainder is shared out to
+        //    stakers. The fee is applied solely when a non-zero rate AND a
+        //    collector are both set.
+        let fee_bps = storage::get_management_fee_bps(&env);
+        let mut fee_amount: i128 = 0;
+        if fee_bps > 0 {
+            match storage::get_fee_collector(&env) {
+                Some(collector) => {
+                    fee_amount = (amount * fee_bps as i128) / 10_000;
+                    if fee_amount > 0 {
+                        reward_client.transfer(
+                            &env.current_contract_address(),
+                            &collector,
+                            &fee_amount,
+                        );
+                    }
+                }
+                None => return Err(Error::FeeCollectorNotSet),
+            }
+        }
+        let distributable = amount - fee_amount;
+
+        // 3. Accumulate the reward per share over the post-fee remainder.
+        let increase = math::reward_increase(distributable, pool.total_shares)?;
         pool.acc_reward_per_share = pool
             .acc_reward_per_share
             .checked_add(increase)
             .ok_or(Error::ArithmeticOverflow)?;
         storage::set_pool(&env, pool_id, &pool);
-        events::distributed(&env, pool_id, &sender, amount);
+
+        // Emit distribution event (reports the net distributed amount).
+        events::distributed(&env, pool_id, &sender, distributable);
+
         Ok(())
     }
 
@@ -272,6 +326,12 @@ impl DistributionContract {
         user.require_auth();
         if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+
+        // Enforce the staking lockup: the position cannot be withdrawn until
+        // its unlock timestamp has passed.
+        if env.ledger().timestamp() < storage::get_unlock_at(&env, &user) {
+            return Err(Error::StillLocked);
         }
 
         let mut pool = Self::load_pool(&env, pool_id)?;
@@ -414,6 +474,124 @@ impl DistributionContract {
         storage::is_paused(&env)
     }
 
+    /// Read-only: The contract's semantic version string. Backed by the same
+    /// CONTRACT_VERSION constant embedded in the wasm metadata.
+    pub fn version(env: Env) -> soroban_sdk::String {
+        soroban_sdk::String::from_str(&env, CONTRACT_VERSION)
+    }
+
+    /// Read-only: Structured contract identity (name, version, description) in a
+    /// single call, mirroring the embedded wasm metadata.
+    pub fn metadata(env: Env) -> crate::types::ContractMetadata {
+        crate::types::ContractMetadata {
+            name: soroban_sdk::String::from_str(&env, "StellarFraction Distribution"),
+            version: soroban_sdk::String::from_str(&env, CONTRACT_VERSION),
+            description: soroban_sdk::String::from_str(
+                &env,
+                "O(1) proportional rental-yield distribution for fractional real estate stakers",
+            ),
+        }
+    }
+
+    /// Admin-only: Set the staking lockup duration (in seconds). New deposits
+    /// lock the depositor's stake for this long before it can be withdrawn.
+    /// A duration of 0 disables lockups entirely.
+    pub fn set_lockup_duration(env: Env, seconds: u64) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        storage::set_lockup_duration(&env, seconds);
+        Ok(())
+    }
+
+    /// Read-only: Current staking lockup duration in seconds (0 = disabled).
+    pub fn get_lockup_duration(env: Env) -> u64 {
+        storage::get_lockup_duration(&env)
+    }
+
+    /// Read-only: Ledger timestamp at which the user's stake unlocks. Returns 0
+    /// when the user has no locked position (never deposited under a lockup).
+    pub fn get_unlock_time(env: Env, user: Address) -> u64 {
+        storage::get_unlock_at(&env, &user)
+    }
+
+    /// Admin-only: Set the landlord management fee in basis points (1 bps =
+    /// 0.01%, so 10000 bps = 100%). Rejected above 10000. A fee of 0 disables
+    /// the skim. The fee is only applied on distribute once a collector is set.
+    pub fn set_management_fee(env: Env, bps: u32) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        if bps > 10_000 {
+            return Err(Error::InvalidFeeBps);
+        }
+
+        storage::set_management_fee_bps(&env, bps);
+        Ok(())
+    }
+
+    /// Read-only: Current management fee in basis points (0 = disabled).
+    pub fn get_management_fee(env: Env) -> u32 {
+        storage::get_management_fee_bps(&env)
+    }
+
+    /// Admin-only: Set the address that receives skimmed management fees
+    /// (e.g. the landlord / property manager treasury).
+    pub fn set_fee_collector(env: Env, collector: Address) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        storage::set_fee_collector(&env, &collector);
+        Ok(())
+    }
+
+    /// Read-only: The configured fee collector, if any has been set.
+    pub fn get_fee_collector(env: Env) -> Option<Address> {
+        storage::get_fee_collector(&env)
+    }
+
+    /// Read-only: The full management-fee configuration as (fee_bps, collector).
+    /// `collector` is None until one is set. Convenience accessor so a client
+    /// can fetch the whole fee policy in a single call.
+    pub fn get_fee_config(env: Env) -> (u32, Option<Address>) {
+        (
+            storage::get_management_fee_bps(&env),
+            storage::get_fee_collector(&env),
+        )
+    }
+
+    /// Admin-only: Rescue tokens accidentally sent to the contract.
+    ///
+    /// Hard-guarded so it can NEVER move the staked share token or the reward
+    /// token - those balances belong to stakers (share custody and owed
+    /// dividends respectively). Only unrelated ("foreign") tokens that were
+    /// mistakenly transferred in can be swept out, protecting user funds.
+    pub fn recover_token(env: Env, token: Address, to: Address, amount: i128) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        if amount <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let pool_count = storage::get_next_pool_id(&env);
+        for pool_id in 0..pool_count {
+            if let Some(pool) = storage::get_pool(&env, pool_id) {
+                if token == pool.share_token || token == pool.reward_token {
+                    return Err(Error::CannotRecoverProtocolToken);
+                }
+            }
+        }
+
+        token::Client::new(&env, &token).transfer(&env.current_contract_address(), &to, &amount);
+
+        Ok(())
+    }
+
     // Helper functions
 
     fn check_initialized(env: &Env) -> Result<(), Error> {
@@ -453,83 +631,3 @@ impl DistributionContract {
         Ok(())
     }
 }
-
-// StellarFraction distribution contract - handles real estate dividend payouts
-
-// Scale factor configured to 1e12 for high-precision arithmetic representation
-
-// Initialize method sets up the primary admin and contract state configuration
-
-// Check if contract has already been initialized to prevent re-initialization
-
-// Store property share token address in persistent storage for stakers check
-
-// Store reward token address in persistent storage for dividend distributions
-
-// Set accumulated reward per share to zero initially for global index tracker
-
-// Set total staked shares to zero initially to represent empty pool state
-
-// Set initialized flag to lock initial setup parameters from future updates
-
-// Deposit function allows users to stake property shares and earn USDC
-
-// Enforce user authorization signature check to secure staking deposits
-
-// Verify that initialization has run successfully before permitting deposits
-
-// Enforce minimum threshold that deposited share amount must be positive
-
-// Fetch share token address from contract storage to identify target SAC client
-
-// Fetch reward token address from contract storage to handle pending claims
-
-// Calculate any pending rewards to be automatically claimed during deposit
-
-// Transfer accumulated dividends to user if they have claimable balances
-
-// Transfer staking shares from user account to contract address securely
-
-// Retrieve current shares staked by this user to update balance database
-
-// Calculate new shares total by adding current amount to the deposit value
-
-// Save updated user shares count to persistent contract storage index
-
-// Fetch global total shares to add newly deposited shares to pool sum
-
-// Save updated global total shares value to track distribution ratio
-
-// Fetch global reward accumulator index to compute new user reward debt
-
-// Calculate new user reward debt based on updated shares and global index
-
-// Save user reward debt to storage to mark previous dividends as claimed
-
-// Withdraw function allows users to unstake their property share tokens
-
-// Enforce user auth check to prevent unauthorized withdrawals from account
-
-// Validate that the withdraw amount is greater than zero before processing
-
-// Verify user has sufficient shares to fulfill the withdrawal request
-
-// Calculate and auto-claim pending dividends before executing unstake
-
-// Transfer share tokens back to user's wallet address from contract balance
-
-// Deduct withdrawn shares from user record to compute new share total
-
-// Remove user share and debt keys from storage if balance reaches zero
-
-// Save updated user shares to storage if remaining balance is positive
-
-// Deduct withdrawn shares from global total shares to adjust pool size
-
-// Distribute function allows admin or users to deposit USDC rent to stakers
-
-// Enforce authorization requirement on sender for rent distribution
-
-// Validate that the distributed amount is positive and non-zero value
-
-// Throw error if distribute is triggered when no shares are staked in pool

@@ -1,0 +1,43 @@
+# cargo-deny policy for the StellarFraction contracts.
+# Run locally with:  cargo install cargo-deny && cargo deny check
+# See https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+# RustSec advisory database used to flag vulnerable dependencies.
+db-urls = ["https://github.com/rustsec/advisory-db"]
+# Refuse to build on a yanked crate.
+yanked = "deny"
+# Advisory IDs to ignore, each with a justification. Keep empty by default.
+ignore = []
+
+[licenses]
+# Only permissive licenses compatible with the project's Apache-2.0 license.
+# A dependency under any other license fails the check and must be reviewed.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+]
+# Require reasonably confident license detection before accepting a crate.
+confidence-threshold = 0.8
+
+[bans]
+# Warn when the dependency tree pulls several versions of the same crate,
+# which bloats the wasm; contract builds should keep this minimal.
+multiple-versions = "warn"
+# A wildcard ("*") version requirement is unsafe for a deployed contract.
+wildcards = "deny"
+# Crates explicitly disallowed, with a reason.
+deny = []
+
+[sources]
+# Dependencies must come from known registries/sources only, to prevent a
+# supply-chain swap to an unexpected origin.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
