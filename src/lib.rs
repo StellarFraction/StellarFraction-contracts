@@ -330,6 +330,12 @@ impl DistributionContract {
         storage::get_lockup_duration(&env)
     }
 
+    /// Read-only: Ledger timestamp at which the user's stake unlocks. Returns 0
+    /// when the user has no locked position (never deposited under a lockup).
+    pub fn get_unlock_time(env: Env, user: Address) -> u64 {
+        storage::get_unlock_at(&env, &user)
+    }
+
     /// Admin-only: Rescue tokens accidentally sent to the contract.
     ///
     /// Hard-guarded so it can NEVER move the staked share token or the reward
