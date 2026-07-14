@@ -8,7 +8,7 @@ pub mod types;
 #[cfg(test)]
 mod test;
 
-use crate::types::Error;
+use crate::types::{Error, Pool, PoolId};
 
 #[contract]
 pub struct DistributionContract;
@@ -31,9 +31,46 @@ impl DistributionContract {
         storage::set_reward_token(&env, &reward_token);
         storage::set_acc_reward_per_share(&env, 0);
         storage::set_total_shares(&env, 0);
+        storage::set_pool(
+            &env,
+            0,
+            &Pool {
+                manager: admin,
+                share_token,
+                reward_token,
+                total_shares: 0,
+                acc_reward_per_share: 0,
+            },
+        );
+        storage::set_next_pool_id(&env, 1);
         storage::set_initialized(&env);
 
         Ok(())
+    }
+
+    /// Creates an isolated dividend pool for another tokenized property.
+    pub fn create_pool(
+        env: Env,
+        manager: Address,
+        share_token: Address,
+        reward_token: Address,
+    ) -> Result<PoolId, Error> {
+        Self::check_initialized(&env)?;
+        storage::get_admin(&env).require_auth();
+
+        let pool_id = storage::get_next_pool_id(&env);
+        let next_pool_id = pool_id.checked_add(1).ok_or(Error::ArithmeticOverflow)?;
+        let pool = Pool {
+            manager,
+            share_token,
+            reward_token,
+            total_shares: 0,
+            acc_reward_per_share: 0,
+        };
+        storage::set_pool(&env, pool_id, &pool);
+        storage::set_next_pool_id(&env, next_pool_id);
+
+        Ok(pool_id)
     }
 
     /// Deposits real estate share tokens to stake them and earn dividends.
