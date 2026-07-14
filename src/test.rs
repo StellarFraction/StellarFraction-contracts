@@ -805,3 +805,34 @@ fn test_unlock_time_reporting() {
     h.client().set_lockup_duration(&99_999);
     assert_eq!(h.client().get_unlock_time(&user), 53_600);
 }
+
+/// Issue #34 (section A): a configured management fee is skimmed off the top of
+/// a distribution to the collector, and only the remainder is shared among
+/// stakers in proportion to their holdings. 10% (1000 bps) of 10_000 = 1000 to
+/// the collector; the remaining 9000 splits 1:3 between the two stakers.
+#[test]
+fn test_fee_extraction_proportional() {
+    let h = setup();
+    let a = Address::generate(&h.env);
+    let b = Address::generate(&h.env);
+    let collector = Address::generate(&h.env);
+
+    h.share_admin().mint(&a, &1000);
+    h.share_admin().mint(&b, &3000);
+    h.reward_admin().mint(&h.admin, &10_000);
+
+    h.client().deposit(&a, &1000);
+    h.client().deposit(&b, &3000);
+
+    h.client().set_management_fee(&1000); // 10%
+    h.client().set_fee_collector(&collector);
+
+    h.client().distribute(&h.admin, &10_000);
+
+    // Collector receives the 10% skim immediately.
+    assert_eq!(h.reward_token().balance(&collector), 1000);
+
+    // Remaining 9000 splits 1:3 -> 2250 / 6750.
+    assert_eq!(h.client().get_pending(&a), 2250);
+    assert_eq!(h.client().get_pending(&b), 6750);
+}
