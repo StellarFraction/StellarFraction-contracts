@@ -1,5 +1,24 @@
 use soroban_sdk::{contracterror, contracttype, Address};
 
+pub type PoolId = u32;
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Pool {
+    pub manager: Address,
+    pub share_token: Address,
+    pub reward_token: Address,
+    pub total_shares: i128,
+    pub acc_reward_per_share: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Position {
+    pub shares: i128,
+    pub reward_debt: i128,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
