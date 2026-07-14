@@ -461,3 +461,5 @@ impl DistributionContract {
 // Initialize method sets up the primary admin and contract state configuration
 
 // Check if contract has already been initialized to prevent re-initialization
+
+// Store property share token address in persistent storage for stakers check
