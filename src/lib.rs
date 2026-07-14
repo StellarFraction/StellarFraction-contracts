@@ -8,7 +8,7 @@ pub mod types;
 #[cfg(test)]
 mod test;
 
-use crate::{math::SCALE_FACTOR, types::Error};
+use crate::types::Error;
 
 #[contract]
 pub struct DistributionContract;
@@ -49,7 +49,7 @@ impl DistributionContract {
         let reward_token_addr = storage::get_reward_token(&env);
 
         // 1. Claim any pending rewards first to prevent overriding them
-        let pending = Self::calculate_pending(&env, &user);
+        let pending = Self::calculate_pending(&env, &user)?;
         if pending > 0 {
             let reward_client = token::Client::new(&env, &reward_token_addr);
             reward_client.transfer(&env.current_contract_address(), &user, &pending);
@@ -61,16 +61,20 @@ impl DistributionContract {
 
         // 3. Update user and global share records
         let current_shares = storage::get_user_shares(&env, &user);
-        let new_shares = current_shares + amount;
+        let new_shares = current_shares
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
         storage::set_user_shares(&env, &user, new_shares);
 
         let total_shares = storage::get_total_shares(&env);
-        let new_total_shares = total_shares + amount;
+        let new_total_shares = total_shares
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
         storage::set_total_shares(&env, new_total_shares);
 
         // 4. Update the user's reward debt
         let acc_reward_per_share = storage::get_acc_reward_per_share(&env);
-        let new_debt = (new_shares * acc_reward_per_share) / SCALE_FACTOR;
+        let new_debt = math::accumulated(new_shares, acc_reward_per_share)?;
         storage::set_user_debt(&env, &user, new_debt);
 
         Ok(())
@@ -94,7 +98,7 @@ impl DistributionContract {
         let reward_token_addr = storage::get_reward_token(&env);
 
         // 1. Claim any pending rewards
-        let pending = Self::calculate_pending(&env, &user);
+        let pending = Self::calculate_pending(&env, &user)?;
         if pending > 0 {
             let reward_client = token::Client::new(&env, &reward_token_addr);
             reward_client.transfer(&env.current_contract_address(), &user, &pending);
@@ -112,12 +116,14 @@ impl DistributionContract {
         } else {
             storage::set_user_shares(&env, &user, new_shares);
             let acc_reward_per_share = storage::get_acc_reward_per_share(&env);
-            let new_debt = (new_shares * acc_reward_per_share) / SCALE_FACTOR;
+            let new_debt = math::accumulated(new_shares, acc_reward_per_share)?;
             storage::set_user_debt(&env, &user, new_debt);
         }
 
         let total_shares = storage::get_total_shares(&env);
-        let new_total_shares = total_shares - amount;
+        let new_total_shares = total_shares
+            .checked_sub(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
         storage::set_total_shares(&env, new_total_shares);
 
         Ok(())
@@ -145,8 +151,10 @@ impl DistributionContract {
 
         // 2. Accumulate the reward per share
         let acc_reward_per_share = storage::get_acc_reward_per_share(&env);
-        let reward_increase = (amount * SCALE_FACTOR) / total_shares;
-        let new_acc_reward_per_share = acc_reward_per_share + reward_increase;
+        let reward_increase = math::reward_increase(amount, total_shares)?;
+        let new_acc_reward_per_share = acc_reward_per_share
+            .checked_add(reward_increase)
+            .ok_or(Error::ArithmeticOverflow)?;
         storage::set_acc_reward_per_share(&env, new_acc_reward_per_share);
 
         Ok(())
@@ -157,7 +165,7 @@ impl DistributionContract {
         user.require_auth();
         Self::check_initialized(&env)?;
 
-        let pending = Self::calculate_pending(&env, &user);
+        let pending = Self::calculate_pending(&env, &user)?;
         if pending <= 0 {
             return Ok(0);
         }
@@ -167,7 +175,7 @@ impl DistributionContract {
         // 1. Reset user debt
         let current_shares = storage::get_user_shares(&env, &user);
         let acc_reward_per_share = storage::get_acc_reward_per_share(&env);
-        let new_debt = (current_shares * acc_reward_per_share) / SCALE_FACTOR;
+        let new_debt = math::accumulated(current_shares, acc_reward_per_share)?;
         storage::set_user_debt(&env, &user, new_debt);
 
         // 2. Transfer rewards
@@ -188,7 +196,8 @@ impl DistributionContract {
     }
 
     /// Read-only: Returns the claimable USDC dividends for a user.
-    pub fn get_pending(env: Env, user: Address) -> i128 {
+    pub fn get_pending(env: Env, user: Address) -> Result<i128, Error> {
+        Self::check_initialized(&env)?;
         Self::calculate_pending(&env, &user)
     }
 
@@ -212,15 +221,14 @@ impl DistributionContract {
         Ok(())
     }
 
-    fn calculate_pending(env: &Env, user: &Address) -> i128 {
+    fn calculate_pending(env: &Env, user: &Address) -> Result<i128, Error> {
         let shares = storage::get_user_shares(env, user);
         if shares == 0 {
-            return 0;
+            return Ok(0);
         }
         let acc_reward_per_share = storage::get_acc_reward_per_share(env);
         let debt = storage::get_user_debt(env, user);
 
-        let accumulated = (shares * acc_reward_per_share) / SCALE_FACTOR;
-        accumulated - debt
+        math::pending(shares, acc_reward_per_share, debt)
     }
 }
