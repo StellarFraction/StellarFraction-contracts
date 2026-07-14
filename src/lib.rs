@@ -1,15 +1,14 @@
 #![no_std]
 use soroban_sdk::{contract, contractimpl, token, Address, Env};
 
+pub mod math;
 pub mod storage;
 pub mod types;
 
 #[cfg(test)]
 mod test;
 
-use crate::types::Error;
-
-const SCALE_FACTOR: i128 = 1_000_000_000_000; // 1e12 for precision
+use crate::{math::SCALE_FACTOR, types::Error};
 
 #[contract]
 pub struct DistributionContract;
