@@ -507,3 +507,5 @@ impl DistributionContract {
 // Save user reward debt to storage to mark previous dividends as claimed
 
 // Withdraw function allows users to unstake their property share tokens
+
+// Enforce user auth check to prevent unauthorized withdrawals from account
