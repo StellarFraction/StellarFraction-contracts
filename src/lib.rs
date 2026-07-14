@@ -46,9 +46,22 @@ impl DistributionContract {
     pub fn deposit(env: Env, user: Address, amount: i128) -> Result<(), Error> {
         user.require_auth();
         Self::check_initialized(&env)?;
+        Self::check_not_paused(&env)?;
 
         if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+
+        let min_deposit = storage::get_minimum_deposit(&env);
+        if amount < min_deposit {
+            return Err(Error::BelowMinimumDeposit);
+        }
+
+        let current_shares = storage::get_user_shares(&env, &user);
+        let new_shares = current_shares + amount;
+        let max_stake = storage::get_max_stake_per_user(&env, &user);
+        if new_shares > max_stake {
+            return Err(Error::ExceedsMaxStake);
         }
 
         let share_token_addr = storage::get_share_token(&env);
@@ -66,8 +79,6 @@ impl DistributionContract {
         share_client.transfer(&user, &env.current_contract_address(), &amount);
 
         // 3. Update user and global share records
-        let current_shares = storage::get_user_shares(&env, &user);
-        let new_shares = current_shares + amount;
         storage::set_user_shares(&env, &user, new_shares);
 
         let total_shares = storage::get_total_shares(&env);
@@ -78,6 +89,9 @@ impl DistributionContract {
         let acc_reward_per_share = storage::get_acc_reward_per_share(&env);
         let new_debt = (new_shares * acc_reward_per_share) / SCALE_FACTOR;
         storage::set_user_debt(&env, &user, new_debt);
+
+        // 5. Emit deposit event
+        env.events().publish(("deposit", user.clone()), (amount, new_shares));
 
         Ok(())
     }
@@ -126,6 +140,9 @@ impl DistributionContract {
         let new_total_shares = total_shares - amount;
         storage::set_total_shares(&env, new_total_shares);
 
+        // 4. Emit withdraw event
+        env.events().publish(("withdraw", user.clone()), (amount, new_shares));
+
         Ok(())
     }
 
@@ -155,6 +172,9 @@ impl DistributionContract {
         let new_acc_reward_per_share = acc_reward_per_share + reward_increase;
         storage::set_acc_reward_per_share(&env, new_acc_reward_per_share);
 
+        // 3. Emit distribution event
+        env.events().publish(("distribute",), (amount, total_shares, new_acc_reward_per_share));
+
         Ok(())
     }
 
@@ -179,6 +199,9 @@ impl DistributionContract {
         // 2. Transfer rewards
         let reward_client = token::Client::new(&env, &reward_token_addr);
         reward_client.transfer(&env.current_contract_address(), &user, &pending);
+
+        // 3. Emit claim event
+        env.events().publish(("claim", user.clone()), pending);
 
         Ok(pending)
     }
@@ -209,11 +232,85 @@ impl DistributionContract {
         (admin, share, reward, total_shares, acc_reward)
     }
 
+    /// Admin-only: Pause contract operations to prevent new deposits during emergencies.
+    pub fn pause(env: Env) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        storage::set_paused(&env, true);
+        env.events().publish(("pause",), true);
+
+        Ok(())
+    }
+
+    /// Admin-only: Unpause contract to resume normal operations.
+    pub fn unpause(env: Env) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        storage::set_paused(&env, false);
+        env.events().publish(("pause",), false);
+
+        Ok(())
+    }
+
+    /// Admin-only: Set minimum deposit amount.
+    pub fn set_minimum_deposit(env: Env, amount: i128) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        if amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        storage::set_minimum_deposit(&env, amount);
+        Ok(())
+    }
+
+    /// Admin-only: Set maximum stake limit for a user.
+    pub fn set_max_stake_per_user(env: Env, user: Address, limit: i128) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        if limit < 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        storage::set_max_stake_per_user(&env, &user, limit);
+        Ok(())
+    }
+
+    /// Admin-only: Transfer admin privileges to a new address.
+    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), Error> {
+        let admin = storage::get_admin(&env);
+        admin.require_auth();
+        Self::check_initialized(&env)?;
+
+        storage::set_admin(&env, &new_admin);
+        Ok(())
+    }
+
+    /// Read-only: Check if contract is paused.
+    pub fn is_paused(env: Env) -> bool {
+        storage::is_paused(&env)
+    }
+
     // Helper functions
 
     fn check_initialized(env: &Env) -> Result<(), Error> {
         if !storage::is_initialized(env) {
             return Err(Error::NotInitialized);
+        }
+        Ok(())
+    }
+
+    fn check_not_paused(env: &Env) -> Result<(), Error> {
+        if storage::is_paused(env) {
+            return Err(Error::ContractPaused);
         }
         Ok(())
     }
