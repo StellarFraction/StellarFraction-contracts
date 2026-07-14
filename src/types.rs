@@ -45,4 +45,7 @@ pub enum Error {
     InvalidAmount = 5,
     NotAdmin = 6,
     ArithmeticOverflow = 7,
+    PoolNotFound = 8,
+    PoolPaused = 9,
+    PoolNotEmpty = 10,
 }
