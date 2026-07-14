@@ -858,3 +858,32 @@ fn test_fee_zero_skims_nothing() {
     assert_eq!(h.reward_token().balance(&collector), 0);
     assert_eq!(h.client().get_pending(&user), 4000);
 }
+
+/// Issue #34 (section C): a non-zero fee with no collector configured is a
+/// misconfiguration - distribute must reject it rather than silently burning
+/// the fee or sending it nowhere. Also confirms the amount check validates the
+/// fee bound (> 10000 bps is rejected at configuration time).
+#[test]
+fn test_fee_without_collector_rejected() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+    h.reward_admin().mint(&h.admin, &10_000);
+    h.client().deposit(&user, &1000);
+
+    // A fee over 100% is rejected up front.
+    assert!(
+        h.client().try_set_management_fee(&10_001).is_err(),
+        "fee above 10000 bps must be rejected"
+    );
+
+    // Valid fee, but no collector set -> distribute is rejected.
+    h.client().set_management_fee(&500);
+    assert!(
+        h.client().try_distribute(&h.admin, &4000).is_err(),
+        "distribute with a fee but no collector must be rejected"
+    );
+
+    // Nothing was distributed while misconfigured.
+    assert_eq!(h.client().get_pending(&user), 0);
+}
