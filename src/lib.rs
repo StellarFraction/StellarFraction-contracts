@@ -169,6 +169,26 @@ impl DistributionContract {
         Ok(())
     }
 
+    /// Claims rewards from a selected property pool.
+    pub fn claim_from(env: Env, pool_id: PoolId, user: Address) -> Result<i128, Error> {
+        user.require_auth();
+        let pool = Self::load_pool(&env, pool_id)?;
+        let mut position = storage::get_position(&env, pool_id, &user);
+        let pending = Self::calculate_pool_pending(&pool, &position)?;
+        if pending <= 0 {
+            return Ok(0);
+        }
+
+        position.reward_debt = math::accumulated(position.shares, pool.acc_reward_per_share)?;
+        storage::set_position(&env, pool_id, &user, &position);
+        token::Client::new(&env, &pool.reward_token).transfer(
+            &env.current_contract_address(),
+            &user,
+            &pending,
+        );
+        Ok(pending)
+    }
+
     /// Deposits real estate share tokens to stake them and earn dividends.
     pub fn deposit(env: Env, user: Address, amount: i128) -> Result<(), Error> {
         user.require_auth();
