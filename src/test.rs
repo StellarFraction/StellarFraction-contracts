@@ -2,10 +2,7 @@
 use super::*;
 use soroban_sdk::{testutils::Address as _, token, Address, Env};
 
-fn register_token<'a>(
-    env: &'a Env,
-    admin: &Address,
-) -> (Address, token::StellarAssetClient<'a>) {
+fn register_token<'a>(env: &'a Env, admin: &Address) -> (Address, token::StellarAssetClient<'a>) {
     let contract = env.register_stellar_asset_contract_v2(admin.clone());
     let address = contract.address();
     let client = token::StellarAssetClient::new(env, &address);
@@ -82,7 +79,7 @@ fn test_full_dividend_distribution_flow() {
     // 9. User B withdraws 1500 shares (unstakes half)
     // This should auto-claim their pending 9000 USDC and set shares to 1500
     client.withdraw(&user_b, &1500);
-    
+
     assert_eq!(client.get_shares(&user_b), 1500);
     assert_eq!(reward_token.balance(&user_b), 9000);
     assert_eq!(share_token.balance(&user_b), 1500);
