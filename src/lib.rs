@@ -459,3 +459,5 @@ impl DistributionContract {
 // Scale factor configured to 1e12 for high-precision arithmetic representation
 
 // Initialize method sets up the primary admin and contract state configuration
+
+// Check if contract has already been initialized to prevent re-initialization
