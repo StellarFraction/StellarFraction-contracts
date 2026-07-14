@@ -196,6 +196,10 @@ fn test_multi_property_pool_flow() {
     client.set_pool_manager(&pool_id, &new_manager);
     assert_eq!(client.get_pool(&pool_id).manager, new_manager);
 
+    client.set_pool_paused(&pool_id, &true);
+    assert!(client.try_deposit_into(&pool_id, &user_a, &100).is_err());
+    client.set_pool_paused(&pool_id, &false);
+
     share_admin.mint(&user_a, &100);
     share_admin.mint(&user_b, &300);
     reward_admin.mint(&admin, &400);

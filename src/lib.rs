@@ -40,6 +40,7 @@ impl DistributionContract {
                 reward_token,
                 total_shares: 0,
                 acc_reward_per_share: 0,
+                paused: false,
             },
         );
         storage::set_next_pool_id(&env, 1);
@@ -66,6 +67,7 @@ impl DistributionContract {
             reward_token,
             total_shares: 0,
             acc_reward_per_share: 0,
+            paused: false,
         };
         storage::set_pool(&env, pool_id, &pool);
         storage::set_next_pool_id(&env, next_pool_id);
@@ -92,6 +94,15 @@ impl DistributionContract {
         Ok(())
     }
 
+    /// Pauses or resumes new deposits and distributions for a property pool.
+    pub fn set_pool_paused(env: Env, pool_id: PoolId, paused: bool) -> Result<(), Error> {
+        let mut pool = Self::load_pool(&env, pool_id)?;
+        pool.manager.require_auth();
+        pool.paused = paused;
+        storage::set_pool(&env, pool_id, &pool);
+        Ok(())
+    }
+
     /// Read-only: Returns an investor's position in a property pool.
     pub fn get_position(env: Env, pool_id: PoolId, user: Address) -> Result<Position, Error> {
         Self::load_pool(&env, pool_id)?;
@@ -111,6 +122,7 @@ impl DistributionContract {
         }
 
         let mut pool = Self::load_pool(&env, pool_id)?;
+        Self::ensure_pool_active(&pool)?;
         let mut position = storage::get_position(&env, pool_id, &user);
         let pending = Self::calculate_pool_pending(&pool, &position)?;
         if pending > 0 {
@@ -161,6 +173,7 @@ impl DistributionContract {
         }
 
         let mut pool = Self::load_pool(&env, pool_id)?;
+        Self::ensure_pool_active(&pool)?;
         if pool.total_shares == 0 {
             return Err(Error::NoSharesStaked);
         }
@@ -475,6 +488,13 @@ impl DistributionContract {
             pool.acc_reward_per_share,
             position.reward_debt,
         )
+    }
+
+    fn ensure_pool_active(pool: &Pool) -> Result<(), Error> {
+        if pool.paused {
+            return Err(Error::PoolPaused);
+        }
+        Ok(())
     }
 
     fn calculate_pending(env: &Env, user: &Address) -> Result<i128, Error> {

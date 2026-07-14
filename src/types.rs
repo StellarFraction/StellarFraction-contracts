@@ -10,6 +10,7 @@ pub struct Pool {
     pub reward_token: Address,
     pub total_shares: i128,
     pub acc_reward_per_share: i128,
+    pub paused: bool,
 }
 
 #[contracttype]
