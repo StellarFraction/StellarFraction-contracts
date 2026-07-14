@@ -90,4 +90,29 @@ Transfers the caller's accrued dividends and returns the amount paid.
 
 **Pending formula:** `pending = shares * acc_reward_per_share / SCALE - debt`.
 
+---
+
+## Admin operations
+
+All require the stored admin's authorization.
+
+| Entrypoint | Effect |
+|------------|--------|
+| `pause()` / `unpause()` | Halt or resume new deposits during an emergency. |
+| `transfer_admin(new_admin)` | Hand admin rights to another address. |
+| `set_minimum_deposit(amount)` | Minimum size for a single deposit. |
+| `set_max_stake_per_user(user, limit)` | Cap a user's total staked shares. |
+| `set_lockup_duration(seconds)` | Lock new deposits for a period (`0` disables). |
+| `set_management_fee(bps)` | Fee in basis points, `0`–`10000` (`InvalidFeeBps` above). |
+| `set_fee_collector(address)` | Destination for skimmed fees. |
+| `recover_token(token, to, amount)` | Rescue **foreign** tokens sent by mistake. |
+
+### `recover_token` safety
+
+`recover_token` **cannot** move the share token or the reward token — those are
+staker custody and owed dividends respectively. Attempting either returns
+`CannotRecoverProtocolToken`, so admin can never sweep user funds. Only
+unrelated tokens accidentally transferred in can be recovered.
+
+
 
