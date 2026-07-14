@@ -49,3 +49,8 @@ pub fn deposited(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
 pub fn distributed(env: &Env, pool_id: PoolId, sender: &Address, amount: i128) {
     emit(env, DISTRIBUTE, [pool_id, sender.clone()], amount);
 }
+
+
+pub fn claimed(env: &Env, pool_id: PoolId, user: &Address, amount: i128) {
+    emit(env, CLAIM, [pool_id, user.clone()], amount);
+}
