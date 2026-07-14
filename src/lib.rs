@@ -8,7 +8,7 @@ pub mod types;
 #[cfg(test)]
 mod test;
 
-use crate::types::{Error, Pool, PoolId};
+use crate::types::{Error, Pool, PoolId, Position};
 
 #[contract]
 pub struct DistributionContract;
@@ -71,6 +71,22 @@ impl DistributionContract {
         storage::set_next_pool_id(&env, next_pool_id);
 
         Ok(pool_id)
+    }
+
+    /// Read-only: Returns one property's pool configuration and accounting state.
+    pub fn get_pool(env: Env, pool_id: PoolId) -> Result<Pool, Error> {
+        Self::load_pool(&env, pool_id)
+    }
+
+    /// Read-only: Returns the number of pools created so far.
+    pub fn get_pool_count(env: Env) -> PoolId {
+        storage::get_next_pool_id(&env)
+    }
+
+    /// Read-only: Returns an investor's position in a property pool.
+    pub fn get_position(env: Env, pool_id: PoolId, user: Address) -> Result<Position, Error> {
+        Self::load_pool(&env, pool_id)?;
+        Ok(storage::get_position(&env, pool_id, &user))
     }
 
     /// Deposits real estate share tokens to stake them and earn dividends.
@@ -256,6 +272,11 @@ impl DistributionContract {
             return Err(Error::NotInitialized);
         }
         Ok(())
+    }
+
+    fn load_pool(env: &Env, pool_id: PoolId) -> Result<Pool, Error> {
+        Self::check_initialized(env)?;
+        storage::get_pool(env, pool_id).ok_or(Error::PoolNotFound)
     }
 
     fn calculate_pending(env: &Env, user: &Address) -> Result<i128, Error> {
