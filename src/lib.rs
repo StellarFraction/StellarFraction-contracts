@@ -519,3 +519,5 @@ impl DistributionContract {
 // Transfer share tokens back to user's wallet address from contract balance
 
 // Deduct withdrawn shares from user record to compute new share total
+
+// Remove user share and debt keys from storage if balance reaches zero
