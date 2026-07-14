@@ -35,3 +35,20 @@ contract renews **one** rent entry instead of a dozen separate ones, and reads
 of hot config values (e.g. `TotalShares` on every `distribute`) stay cheap. The
 whole set is a handful of small scalars/addresses, so the instance footprint
 stays tiny.
+
+## Persistent storage — per-user data
+
+Per-user entries are keyed by address and their **count grows with the number
+of stakers**, so they live in **persistent** storage where each entry is
+rent-managed independently:
+
+- `UserShare(Address)` — staked share balance
+- `UserDebt(Address)` — reward-debt baseline
+- `UnlockAt(Address)` — lockup expiry timestamp
+- `MaxStakePerUser(Address)` — optional per-user stake cap
+
+**Why not instance:** putting unbounded per-user data in the instance bucket
+would make the instance grow without limit and force every caller to pay rent
+proportional to the entire user set. Keeping each user's data in its own
+persistent entry means a staker only ever pays rent for **their own** slot, and
+the global config bucket stays constant-size no matter how many stakers join.
