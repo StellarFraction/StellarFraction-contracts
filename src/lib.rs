@@ -479,3 +479,5 @@ impl DistributionContract {
 // Verify that initialization has run successfully before permitting deposits
 
 // Enforce minimum threshold that deposited share amount must be positive
+
+// Fetch share token address from contract storage to identify target SAC client
