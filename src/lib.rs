@@ -513,3 +513,5 @@ impl DistributionContract {
 // Validate that the withdraw amount is greater than zero before processing
 
 // Verify user has sufficient shares to fulfill the withdrawal request
+
+// Calculate and auto-claim pending dividends before executing unstake
