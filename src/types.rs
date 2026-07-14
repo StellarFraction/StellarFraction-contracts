@@ -1,5 +1,25 @@
 use soroban_sdk::{contracterror, contracttype, Address, String};
 
+pub type PoolId = u32;
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Pool {
+    pub manager: Address,
+    pub share_token: Address,
+    pub reward_token: Address,
+    pub total_shares: i128,
+    pub acc_reward_per_share: i128,
+    pub paused: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Position {
+    pub shares: i128,
+    pub reward_debt: i128,
+}
+
 /// Structured, on-chain-readable identity for the contract, returned by the
 /// `metadata()` entrypoint. Mirrors the embedded wasm `contractmeta!` values in
 /// a form clients can fetch in a single call.
@@ -22,13 +42,16 @@ pub enum DataKey {
     UserShare(Address), // Amount of deed tokens staked by a user
     UserDebt(Address),  // Reward debt for a user
     Initialized,
-    Paused,             // Contract pause status
-    MinimumDeposit,     // Minimum deposit amount
+    NextPoolId,
+    Pool(PoolId),
+    Position(PoolId, Address),
+    Paused,                   // Contract pause status
+    MinimumDeposit,           // Minimum deposit amount
     MaxStakePerUser(Address), // Maximum stake limit per user
-    LockupDuration,     // Seconds a deposit is locked before it can be withdrawn
-    UnlockAt(Address),  // Ledger timestamp at which a user's stake unlocks
-    ManagementFeeBps,   // Landlord management fee in basis points (1 bps = 0.01%)
-    FeeCollector,       // Address that receives skimmed management fees
+    LockupDuration,           // Seconds a deposit is locked before it can be withdrawn
+    UnlockAt(Address),        // Ledger timestamp at which a user's stake unlocks
+    ManagementFeeBps,         // Landlord management fee in basis points (1 bps = 0.01%)
+    FeeCollector,             // Address that receives skimmed management fees
 }
 
 #[contracterror]
@@ -43,8 +66,13 @@ pub enum Error {
     ContractPaused = 7,
     BelowMinimumDeposit = 8,
     ExceedsMaxStake = 9,
-    CannotRecoverProtocolToken = 10,
-    StillLocked = 11,
-    InvalidFeeBps = 12,
-    FeeCollectorNotSet = 13,
+    ArithmeticOverflow = 10,
+    PoolNotFound = 11,
+    PoolPaused = 12,
+    PoolNotEmpty = 13,
+    TooManyPools = 14,
+    CannotRecoverProtocolToken = 15,
+    StillLocked = 16,
+    InvalidFeeBps = 17,
+    FeeCollectorNotSet = 18,
 }

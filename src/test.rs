@@ -2,9 +2,16 @@
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
-    token::{StellarAssetClient, TokenClient},
-    Address, Env,
+    token::{self, StellarAssetClient, TokenClient},
+    vec, Address, Env,
 };
+
+fn register_token<'a>(env: &'a Env, admin: &Address) -> (Address, token::StellarAssetClient<'a>) {
+    let contract = env.register_stellar_asset_contract_v2(admin.clone());
+    let address = contract.address();
+    let client = token::StellarAssetClient::new(env, &address);
+    (address, client)
+}
 
 /// Register a Stellar Asset Contract to act as a mock token.
 /// Returns (token address, standard client, admin client for minting).
@@ -30,7 +37,7 @@ fn test_full_dividend_distribution_flow() {
     let user_a = Address::generate(&env);
     let user_b = Address::generate(&env);
 
-    // 1. Register mock share and reward tokens (Stellar Asset Contracts)
+    // 1. Register Mock Share and Reward Tokens (using built-in token simulator in testutils)
     let (share_token_id, share_token, share_token_admin) = create_token(&env, &admin);
     let (reward_token_id, reward_token, reward_token_admin) = create_token(&env, &admin);
 
@@ -286,9 +293,8 @@ fn test_precision_rounding_micro_investments() {
 
     // 2 units across 3 shares -> per-share increment truncates, all pending 0.
     h.client().distribute(&h.admin, &2);
-    let pending_sum = h.client().get_pending(&a)
-        + h.client().get_pending(&b)
-        + h.client().get_pending(&c);
+    let pending_sum =
+        h.client().get_pending(&a) + h.client().get_pending(&b) + h.client().get_pending(&c);
     assert_eq!(pending_sum, 0, "rounding must never over-pay stakers");
 
     // 3 units across 3 shares divides cleanly -> each owed exactly 1.
@@ -604,7 +610,11 @@ fn test_execution_footprint_within_limits() {
 
     // Sanity: the worst-case call should use only a small fraction of budget,
     // i.e. an order of magnitude below the ceiling.
-    assert!(cpu * 10 < CPU_TX_LIMIT, "deposit CPU footprint has thin headroom: {}", cpu);
+    assert!(
+        cpu * 10 < CPU_TX_LIMIT,
+        "deposit CPU footprint has thin headroom: {}",
+        cpu
+    );
 }
 
 /// Issue #30 (section B): a foreign token accidentally sent to the contract
@@ -681,11 +691,15 @@ fn test_recover_rejects_bad_amount() {
     let (foreign_id, _, _) = create_token(&h.env, &h.admin);
 
     assert!(
-        h.client().try_recover_token(&foreign_id, &recipient, &0).is_err(),
+        h.client()
+            .try_recover_token(&foreign_id, &recipient, &0)
+            .is_err(),
         "zero-amount recovery must be rejected"
     );
     assert!(
-        h.client().try_recover_token(&foreign_id, &recipient, &-100).is_err(),
+        h.client()
+            .try_recover_token(&foreign_id, &recipient, &-100)
+            .is_err(),
         "negative-amount recovery must be rejected"
     );
 }
@@ -958,7 +972,10 @@ fn test_contract_metadata_accessors() {
     assert_eq!(h.client().version(), expected_version);
 
     let md = h.client().metadata();
-    assert_eq!(md.name, String::from_str(&h.env, "StellarFraction Distribution"));
+    assert_eq!(
+        md.name,
+        String::from_str(&h.env, "StellarFraction Distribution")
+    );
     assert_eq!(md.version, expected_version);
     assert_eq!(
         md.description,
@@ -970,4 +987,155 @@ fn test_contract_metadata_accessors() {
 
     // version() and metadata().version must agree.
     assert_eq!(h.client().version(), md.version);
+}
+
+#[test]
+fn test_global_pause_and_deposit_constraints_apply_to_pools() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let (share_token_id, share_admin) = register_token(&env, &admin);
+    let (reward_token_id, reward_admin) = register_token(&env, &admin);
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &share_token_id, &reward_token_id);
+    share_admin.mint(&user, &100);
+    reward_admin.mint(&admin, &10);
+    client.set_minimum_deposit(&50);
+    assert!(client.try_deposit(&user, &49).is_err());
+
+    client.set_max_stake_per_user(&user, &60);
+    assert!(client.try_deposit(&user, &61).is_err());
+    client.deposit(&user, &60);
+
+    client.pause();
+    assert!(client.is_paused());
+    assert!(client.try_deposit(&user, &50).is_err());
+    assert!(client.try_distribute(&admin, &10).is_err());
+    client.withdraw(&user, &10);
+
+    client.unpause();
+    assert!(!client.is_paused());
+}
+
+#[test]
+fn test_deposit_after_distribution_does_not_receive_historical_rewards() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let early_user = Address::generate(&env);
+    let late_user = Address::generate(&env);
+    let (share_token_id, share_token_admin) = register_token(&env, &admin);
+    let (reward_token_id, reward_token_admin) = register_token(&env, &admin);
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &share_token_id, &reward_token_id);
+    share_token_admin.mint(&early_user, &100);
+    share_token_admin.mint(&late_user, &100);
+    reward_token_admin.mint(&admin, &200);
+
+    client.deposit(&early_user, &100);
+    client.distribute(&admin, &100);
+    client.deposit(&late_user, &100);
+
+    assert_eq!(client.get_pending(&early_user), 100);
+    assert_eq!(client.get_pending(&late_user), 0);
+
+    client.distribute(&admin, &100);
+    assert_eq!(client.get_pending(&early_user), 150);
+    assert_eq!(client.get_pending(&late_user), 50);
+}
+
+#[test]
+fn test_multi_property_pool_flow() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let manager = Address::generate(&env);
+    let user_a = Address::generate(&env);
+    let user_b = Address::generate(&env);
+    let (legacy_share, _) = register_token(&env, &admin);
+    let (legacy_reward, _) = register_token(&env, &admin);
+    let (share_token, share_admin) = register_token(&env, &admin);
+    let (reward_token, reward_admin) = register_token(&env, &admin);
+    let share_client = token::Client::new(&env, &share_token);
+    let reward_client = token::Client::new(&env, &reward_token);
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &legacy_share, &legacy_reward);
+    let pool_id = client.create_pool(&manager, &share_token, &reward_token);
+    assert_eq!(pool_id, 1);
+    assert_eq!(client.get_pool_count(), 2);
+    let new_manager = Address::generate(&env);
+    client.set_pool_manager(&pool_id, &new_manager);
+    assert_eq!(client.get_pool(&pool_id).manager, new_manager);
+
+    client.set_pool_paused(&pool_id, &true);
+    assert!(client.try_deposit_into(&pool_id, &user_a, &100).is_err());
+    client.set_pool_paused(&pool_id, &false);
+
+    share_admin.mint(&user_a, &100);
+    share_admin.mint(&user_b, &300);
+    reward_admin.mint(&admin, &400);
+    client.deposit_into(&pool_id, &user_a, &100);
+    client.deposit_into(&pool_id, &user_b, &300);
+    client.distribute_to(&pool_id, &admin, &400);
+
+    assert_eq!(client.get_pool_pending(&pool_id, &user_a), 100);
+    assert_eq!(client.get_pool_pending(&pool_id, &user_b), 300);
+    assert_eq!(client.claim_from(&pool_id, &user_a), 100);
+    assert_eq!(reward_client.balance(&user_a), 100);
+
+    client.withdraw_from(&pool_id, &user_b, &100);
+    assert_eq!(reward_client.balance(&user_b), 300);
+    assert_eq!(share_client.balance(&user_b), 100);
+    assert_eq!(client.get_position(&pool_id, &user_b).shares, 200);
+    assert_eq!(client.get_pool(&pool_id).total_shares, 300);
+}
+
+#[test]
+fn test_property_pool_accounting_is_isolated() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    let (share_a, share_a_admin) = register_token(&env, &admin);
+    let (reward_a, reward_a_admin) = register_token(&env, &admin);
+    let (share_b, share_b_admin) = register_token(&env, &admin);
+    let (reward_b, reward_b_admin) = register_token(&env, &admin);
+    let contract_id = env.register(DistributionContract, ());
+    let client = DistributionContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &share_a, &reward_a);
+    let pool_a = 0;
+    let pool_b = client.create_pool(&admin, &share_b, &reward_b);
+    share_a_admin.mint(&user, &100);
+    share_b_admin.mint(&user, &400);
+    reward_a_admin.mint(&admin, &50);
+    reward_b_admin.mint(&admin, &800);
+
+    client.deposit_into(&pool_a, &user, &100);
+    client.deposit_into(&pool_b, &user, &400);
+    client.distribute_to(&pool_a, &admin, &50);
+    assert_eq!(client.get_pool_pending(&pool_a, &user), 50);
+    assert_eq!(client.get_pool_pending(&pool_b, &user), 0);
+
+    client.distribute_to(&pool_b, &admin, &800);
+    assert_eq!(client.get_pool_pending(&pool_a, &user), 50);
+    assert_eq!(client.get_pool_pending(&pool_b, &user), 800);
+    assert_eq!(client.get_pool(&pool_a).total_shares, 100);
+    assert_eq!(client.get_pool(&pool_b).total_shares, 400);
+
+    let claimed = client.claim_many(&user, &vec![&env, pool_a, pool_b]);
+    assert_eq!(claimed, 850);
+    assert_eq!(token::Client::new(&env, &reward_a).balance(&user), 50);
+    assert_eq!(token::Client::new(&env, &reward_b).balance(&user), 800);
 }
