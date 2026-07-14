@@ -41,6 +41,7 @@ This repository hosts the **Rust-based smart contract** deployed to the Stellar 
 ### Key Objectives:
 1. **Mathematical Yield Precision:** Distribute USDC rental payouts to stakers proportionally without rounding leakage.
 2. **Gas-Efficient Execution:** Implement an **$O(1)$ reward distribution algorithm** to allow millions of stakers to claim rewards without causing transaction block timeouts.
+3. **Multi-Property Isolation:** Maintain independent tokens, balances, reward indices, managers, and lifecycle controls for every property pool.
 
 ### 📐 The $O(1)$ Staking Pool Algorithm
 To avoid looping through thousands of investor accounts in a single transaction (which would fail due to block gas limits), the contract maintains global accumulator indices:
@@ -50,6 +51,27 @@ To avoid looping through thousands of investor accounts in a single transaction 
   $$PendingAmount = \frac{UserShares \times AccRewardPerShare_{new}}{10^{12}} - UserDebt$$
 - **Debt Adjustment:** To prevent double-claiming historical distributions, the investor's `UserDebt` is synchronized:
   $$UserDebt_{new} = \frac{UserShares \times AccRewardPerShare_{new}}{10^{12}}$$
+
+### Multi-property pools
+
+Initialization creates pool `0` from the original share and reward token arguments. The admin can then create additional isolated pools:
+
+```text
+create_pool(manager, share_token, reward_token) -> PoolId
+deposit_into(pool_id, user, amount)
+distribute_to(pool_id, sender, amount)
+claim_from(pool_id, user) -> amount
+withdraw_from(pool_id, user, amount)
+claim_many(user, pool_ids) -> total_amount
+```
+
+Pool managers can rotate their manager address and pause or resume deposits and distributions. Claims and withdrawals remain available while paused so investors are never locked in. `claim_many` accepts at most 20 pool IDs to keep resource use bounded.
+
+Read APIs include `get_pool`, `get_pool_count`, `get_position`, and `get_pool_pending`. Pool lifecycle and accounting operations emit `pool_new`, `manager`, `paused`, `deposit`, `distrib`, `claim`, and `withdraw` events for indexers.
+
+### Compatibility and migration
+
+The original `deposit`, `withdraw`, `distribute`, `claim`, `get_shares`, `get_debt`, and `get_pending` methods remain available and now delegate to pool `0`. Existing clients can therefore keep their original calls while new clients use the pool-scoped APIs. Deployments upgrading from storage created before multi-pool support should migrate their legacy totals and investor records into pool `0` before switching WASM; fresh deployments require no migration.
 
 ---
 
