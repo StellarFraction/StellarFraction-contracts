@@ -521,3 +521,5 @@ impl DistributionContract {
 // Deduct withdrawn shares from user record to compute new share total
 
 // Remove user share and debt keys from storage if balance reaches zero
+
+// Save updated user shares to storage if remaining balance is positive
