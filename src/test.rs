@@ -1,7 +1,7 @@
 #![cfg(test)]
 use super::*;
 use soroban_sdk::{
-    testutils::Address as _,
+    testutils::{Address as _, Ledger as _},
     token::{StellarAssetClient, TokenClient},
     Address, Env,
 };
@@ -688,4 +688,25 @@ fn test_recover_rejects_bad_amount() {
         h.client().try_recover_token(&foreign_id, &recipient, &-100).is_err(),
         "negative-amount recovery must be rejected"
     );
+}
+
+/// Issue #32 (section A): with a lockup configured, a freshly deposited stake
+/// cannot be withdrawn until the lock window has elapsed.
+#[test]
+fn test_lockup_blocks_early_withdraw() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+
+    // 7-day lockup, deposit at t = 1000.
+    h.client().set_lockup_duration(&(7 * 24 * 3600));
+    h.env.ledger().set_timestamp(1000);
+    h.client().deposit(&user, &1000);
+
+    // Immediately trying to withdraw is rejected while still locked.
+    assert!(
+        h.client().try_withdraw(&user, &1000).is_err(),
+        "withdraw must be blocked during the lockup window"
+    );
+    assert_eq!(h.client().get_shares(&user), 1000);
 }
