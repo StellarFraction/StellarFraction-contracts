@@ -1,4 +1,4 @@
-use crate::types::DataKey;
+use crate::types::{DataKey, Pool, PoolId, Position};
 use soroban_sdk::{Address, Env};
 
 pub fn is_initialized(env: &Env) -> bool {
@@ -97,4 +97,47 @@ pub fn remove_user_debt(env: &Env, user: &Address) {
     env.storage()
         .persistent()
         .remove(&DataKey::UserDebt(user.clone()));
+}
+
+pub fn get_next_pool_id(env: &Env) -> PoolId {
+    env.storage()
+        .instance()
+        .get(&DataKey::NextPoolId)
+        .unwrap_or(0)
+}
+
+pub fn set_next_pool_id(env: &Env, pool_id: PoolId) {
+    env.storage().instance().set(&DataKey::NextPoolId, &pool_id);
+}
+
+pub fn get_pool(env: &Env, pool_id: PoolId) -> Option<Pool> {
+    env.storage().persistent().get(&DataKey::Pool(pool_id))
+}
+
+pub fn set_pool(env: &Env, pool_id: PoolId, pool: &Pool) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Pool(pool_id), pool);
+}
+
+pub fn get_position(env: &Env, pool_id: PoolId, user: &Address) -> Position {
+    env.storage()
+        .persistent()
+        .get(&DataKey::Position(pool_id, user.clone()))
+        .unwrap_or(Position {
+            shares: 0,
+            reward_debt: 0,
+        })
+}
+
+pub fn set_position(env: &Env, pool_id: PoolId, user: &Address, position: &Position) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Position(pool_id, user.clone()), position);
+}
+
+pub fn remove_position(env: &Env, pool_id: PoolId, user: &Address) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Position(pool_id, user.clone()));
 }
