@@ -63,3 +63,31 @@ Unstakes `amount` share tokens back to the user.
 - **Auto-claims** pending rewards as part of the withdrawal.
 - A full withdrawal clears the position's share and debt storage entries.
 
+---
+
+## Distribution & Claiming
+
+### `distribute(sender, amount) -> Result<(), Error>`
+
+Deposits a lump sum of reward tokens and spreads it across current stakers.
+
+- Requires `sender.require_auth()`.
+- Fails with `NoSharesStaked` when the pool is empty (also guards the
+  `amount * SCALE / total_shares` division against a zero denominator).
+- If a **management fee** is configured, `fee = amount * fee_bps / 10000` is
+  skimmed to the fee collector first; only the remainder is shared out. A
+  non-zero fee with no collector set is rejected (`FeeCollectorNotSet`).
+- Cost is **O(1)** — only the global accumulator is updated, regardless of
+  staker count.
+
+### `claim(user) -> Result<i128, Error>`
+
+Transfers the caller's accrued dividends and returns the amount paid.
+
+- Requires `user.require_auth()`.
+- Returns `0` (no transfer) when nothing is pending.
+- Resets the caller's reward debt to the current accumulator baseline.
+
+**Pending formula:** `pending = shares * acc_reward_per_share / SCALE - debt`.
+
+
