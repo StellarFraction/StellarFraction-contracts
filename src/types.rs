@@ -11,6 +11,9 @@ pub enum DataKey {
     UserShare(Address), // Amount of deed tokens staked by a user
     UserDebt(Address),  // Reward debt for a user
     Initialized,
+    Paused,             // Contract pause status
+    MinimumDeposit,     // Minimum deposit amount
+    MaxStakePerUser(Address), // Maximum stake limit per user
 }
 
 #[contracterror]
@@ -22,4 +25,7 @@ pub enum Error {
     NoSharesStaked = 4,
     InvalidAmount = 5,
     NotAdmin = 6,
+    ContractPaused = 7,
+    BelowMinimumDeposit = 8,
+    ExceedsMaxStake = 9,
 }
