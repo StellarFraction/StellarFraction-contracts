@@ -556,3 +556,53 @@ fn test_benchmark_reward_math_is_constant() {
         mem_linear
     );
 }
+
+/// Issue #29: verify the heaviest single call stays comfortably inside
+/// Soroban's per-transaction resource limits. `deposit` is the worst case: it
+/// authorizes, auto-claims pending rewards (a reward-token transfer), then
+/// moves share tokens into custody and rewrites three storage entries. We
+/// measure it and assert both CPU instructions and memory sit well under the
+/// network ceilings, leaving ample headroom for host/auth overhead on-chain.
+#[test]
+fn test_execution_footprint_within_limits() {
+    // Soroban smart-contract per-transaction resource ceilings.
+    const CPU_TX_LIMIT: u64 = 100_000_000; // instructions
+    const MEM_TX_LIMIT: u64 = 40 * 1024 * 1024; // 40 MiB
+
+    let h = setup();
+    let user = Address::generate(&h.env);
+    let other = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1_000_000);
+    h.share_admin().mint(&other, &1_000_000);
+    h.reward_admin().mint(&h.admin, &1_000_000);
+
+    // Establish a position and accrue pending so the next deposit auto-claims.
+    h.client().deposit(&user, &1000);
+    h.client().deposit(&other, &1000);
+    h.client().distribute(&h.admin, &10_000);
+    assert!(h.client().get_pending(&user) > 0);
+
+    // Measure only the worst-case deposit (auto-claim + custody + storage).
+    h.env.cost_estimate().budget().reset_default();
+    h.client().deposit(&user, &500);
+    let b = h.env.cost_estimate().budget();
+    let cpu = b.cpu_instruction_cost();
+    let mem = b.memory_bytes_cost();
+
+    assert!(
+        cpu < CPU_TX_LIMIT,
+        "deposit CPU footprint {} exceeds Soroban tx limit {}",
+        cpu,
+        CPU_TX_LIMIT
+    );
+    assert!(
+        mem < MEM_TX_LIMIT,
+        "deposit memory footprint {} exceeds Soroban tx limit {}",
+        mem,
+        MEM_TX_LIMIT
+    );
+
+    // Sanity: the worst-case call should use only a small fraction of budget,
+    // i.e. an order of magnitude below the ceiling.
+    assert!(cpu * 10 < CPU_TX_LIMIT, "deposit CPU footprint has thin headroom: {}", cpu);
+}
