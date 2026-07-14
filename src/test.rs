@@ -367,3 +367,43 @@ fn test_multiple_staker_distribution() {
     // c only earns from the round it was present for.
     assert_eq!(h.client().get_pending(&c), 6000);
 }
+
+/// Issue #26: unit-test the withdrawal path - a partial withdraw returns the
+/// exact share count, auto-claims pending rewards, and leaves the remaining
+/// position earning; a full withdraw clears the position entirely and zeroes
+/// its pending. Also confirms the global total shrinks by each withdrawal.
+#[test]
+fn test_staker_share_withdrawals() {
+    let h = setup();
+    let user = Address::generate(&h.env);
+    h.share_admin().mint(&user, &1000);
+    h.reward_admin().mint(&h.admin, &10_000);
+
+    h.client().deposit(&user, &1000);
+
+    // Accrue 1000 in rewards to the sole staker.
+    h.client().distribute(&h.admin, &1000);
+    assert_eq!(h.client().get_pending(&user), 1000);
+
+    // Partial withdraw of 400 auto-claims the 1000 pending and returns shares.
+    h.client().withdraw(&user, &400);
+    assert_eq!(h.client().get_shares(&user), 600);
+    assert_eq!(h.share_token().balance(&user), 400);
+    assert_eq!(h.reward_token().balance(&user), 1000); // auto-claimed
+    assert_eq!(h.client().get_pending(&user), 0);
+    let (_, _, _, total_after_partial, _) = h.client().get_contract_info();
+    assert_eq!(total_after_partial, 600);
+
+    // Remaining 600 still earns on the next distribution.
+    h.client().distribute(&h.admin, &600);
+    assert_eq!(h.client().get_pending(&user), 600);
+
+    // Full withdraw clears the position and pays out the remaining pending.
+    h.client().withdraw(&user, &600);
+    assert_eq!(h.client().get_shares(&user), 0);
+    assert_eq!(h.client().get_pending(&user), 0);
+    assert_eq!(h.share_token().balance(&user), 1000);
+    assert_eq!(h.reward_token().balance(&user), 1600);
+    let (_, _, _, total_after_full, _) = h.client().get_contract_info();
+    assert_eq!(total_after_full, 0);
+}
