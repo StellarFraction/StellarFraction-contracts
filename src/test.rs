@@ -671,3 +671,21 @@ fn test_recover_rejects_reward_token() {
     assert_eq!(h.client().claim(&user), 5000);
     assert_eq!(h.reward_token().balance(&user), 5000);
 }
+
+/// Issue #30 (section E): recover_token must validate its amount - zero and
+/// negative sweeps are rejected as invalid rather than silently succeeding.
+#[test]
+fn test_recover_rejects_bad_amount() {
+    let h = setup();
+    let recipient = Address::generate(&h.env);
+    let (foreign_id, _, _) = create_token(&h.env, &h.admin);
+
+    assert!(
+        h.client().try_recover_token(&foreign_id, &recipient, &0).is_err(),
+        "zero-amount recovery must be rejected"
+    );
+    assert!(
+        h.client().try_recover_token(&foreign_id, &recipient, &-100).is_err(),
+        "negative-amount recovery must be rejected"
+    );
+}
