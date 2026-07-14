@@ -471,3 +471,5 @@ impl DistributionContract {
 // Set total staked shares to zero initially to represent empty pool state
 
 // Set initialized flag to lock initial setup parameters from future updates
+
+// Deposit function allows users to stake property shares and earn USDC
