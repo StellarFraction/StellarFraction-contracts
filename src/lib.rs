@@ -473,3 +473,5 @@ impl DistributionContract {
 // Set initialized flag to lock initial setup parameters from future updates
 
 // Deposit function allows users to stake property shares and earn USDC
+
+// Enforce user authorization signature check to secure staking deposits
