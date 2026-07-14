@@ -505,3 +505,5 @@ impl DistributionContract {
 // Calculate new user reward debt based on updated shares and global index
 
 // Save user reward debt to storage to mark previous dividends as claimed
+
+// Withdraw function allows users to unstake their property share tokens
